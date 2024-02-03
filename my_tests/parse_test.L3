@@ -1,0 +1,22 @@
+define @main() {
+	%dest <- %src
+	%dest <- %lhs + %rhs
+	%dest <- %lhs > %rhs
+	%dest <- load %addr
+	store %addr <- %src
+	:label
+	br :label
+	br %_ :label
+	br 0 :label
+	call @fun_with_args(%a)
+	%dest <- call @fun_with_more_args(%a, %b, %c)
+	return
+}
+
+define @fun_with_args(%a) {
+	return 10
+}
+
+define @fun_with_more_args(%a, %b, %c) {
+	return %var
+}
