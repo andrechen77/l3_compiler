@@ -25,4 +25,7 @@ namespace std_alias {
 
 	template<typename T>
 	using Opt = std::optional<T>;
+
+	template<typename T1, typename T2>
+	using Pair = std::pair<T1, T2>;
 }

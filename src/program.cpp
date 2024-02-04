@@ -1,6 +1,7 @@
 #include "program.h"
 #include "std_alias.h"
 #include "utils.h"
+#include <assert.h>
 #include <map>
 
 namespace L3::program {
@@ -71,6 +72,9 @@ namespace L3::program {
 		return result;
 	}
 
+	void InstructionReturn::bind_to_scope(AggregateScope &agg_scope) {
+		// TODO
+	}
 	std::string InstructionReturn::to_string() const {
 		std::string result = "return";
 		if (this->return_value) {
@@ -79,6 +83,13 @@ namespace L3::program {
 		return result;
 	}
 
+	void InstructionAssignment::bind_to_scope(AggregateScope &agg_scope) {
+		// TODO
+	}
+	bool InstructionAssignment::get_moves_control_flow() const {
+		// TODO
+		return false;
+	}
 	std::string InstructionAssignment::to_string() const {
 		std::string result;
 		if (this->maybe_dest) {
@@ -88,10 +99,16 @@ namespace L3::program {
 		return result;
 	}
 
+	void InstructionLabel::bind_to_scope(AggregateScope &agg_scope) {
+		// TODO
+	}
 	std::string InstructionLabel::to_string() const {
 		return ":" + this->label_name;
 	}
 
+	void InstructionBranch::bind_to_scope(AggregateScope &agg_scope) {
+		// TODO
+	}
 	std::string InstructionBranch::to_string() const {
 		std::string result = "br ";
 		if (this->condition) {
@@ -100,6 +117,7 @@ namespace L3::program {
 		result += this->label->to_string();
 		return result;
 	}
+
 
 	std::string Variable::to_string() const {
 		return this->name;
@@ -111,31 +129,59 @@ namespace L3::program {
 	std::string L3Function::to_string() const {
 		return "@" + this->name;
 	}
-	/* L3Function::Builder::Builder() :
+	L3Function::Builder::Builder() :
 		// default-construct everything else
+		current_block { std::make_unique<BasicBlock>() },
 		last_block_falls_through { false }
 	{}
-	class BuilderHelper : public InstructionVisitor {
-		// TODO you were here
-		BuilderHelper() {
-			L3Function::Builder b;
-			b.vars;
+	Pair<L3Function, AggregateScope> L3Function::Builder::get_result() {
+		// store the current block
+		if (!this->current_block->instructions.empty()) {
+			this->store_current_block();
 		}
-	};
-	void L3Function::Builder::add_next_instruction(Uptr<Instruction> &instruction) {
-		if (!this->current_block) {
-			this->current_block.emplace();
+
+		// bind all unbound variables to new variable items
+		Vec<Uptr<Variable>> vars;
+		for (std::string name : this->agg_scope.variable_scope.get_free_names()) {
+			Uptr<Variable> var_ptr = std::make_unique<Variable>(name);
+			this->agg_scope.variable_scope.resolve_item(mv(name), var_ptr.get());
+			vars.emplace_back(mv(var_ptr));
 		}
-		if (this->last_block_falls_through) {
+
+		// return the result
+		return std::make_pair(
+			mv(L3Function(
+				mv(this->name),
+				mv(this->blocks),
+				mv(vars),
+				mv(this->parameter_vars)
+			)),
+			mv(this->agg_scope)
+		);
+	}
+	void L3Function::Builder::add_name(std::string name) {
+		this->name = mv(name);
+	}
+	void L3Function::Builder::add_next_instruction(Uptr<Instruction> &inst) {
+		/* if (this->last_block_falls_through) {
 			this->last_block_falls_through = false;
 			this->blocks.back()->succ_blocks.push_back((*this->current_block).get());
+		} */
+		inst->bind_to_scope(this->agg_scope);
+		if (InstructionLabel *inst_label = dynamic_cast<InstructionLabel *>(inst.get()); inst_label) {
+			this->store_current_block();
 		}
-		instruction->bind_to_scope(this->agg_scope);
-		// TODO do something special based on the type of instruction
-		// instructions with call or return/branch instructions wrap up the block
-		// label instructions create a new block
-		(*this->current_block)->instructions.push_back(mv(instruction));
-	} */
+		bool moves_control_flow = inst->get_moves_control_flow();
+		this->current_block->instructions.push_back(mv(inst));
+		if (moves_control_flow) {
+			this->store_current_block();
+		}
+		// TODO handle chaining basic blocks together
+	}
+	void L3Function::Builder::store_current_block() {
+		this->blocks.push_back(mv(this->current_block));
+		this->current_block = std::make_unique<BasicBlock>();
+	}
 
 	bool ExternalFunction::verify_argument_num(int num) const {
 		for (int valid_num : this->valid_num_arguments) {

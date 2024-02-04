@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <iostream>
+#include <typeinfo>
 
 namespace L3::program {
 	using namespace std_alias;
@@ -182,6 +183,7 @@ namespace L3::program {
 	class Instruction {
 		public:
 		virtual void bind_to_scope(AggregateScope &agg_scope) = 0;
+		virtual bool get_moves_control_flow() const = 0;
 		virtual std::string to_string() const = 0;
 		virtual void accept(InstructionVisitor &v) = 0;
 	};
@@ -194,6 +196,7 @@ namespace L3::program {
 		InstructionReturn(Uptr<Expr> &&return_value) : return_value { mv(return_value) } {}
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
+		virtual bool get_moves_control_flow() const { return true; };
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
@@ -211,6 +214,7 @@ namespace L3::program {
 		{}
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
+		virtual bool get_moves_control_flow() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
@@ -224,6 +228,7 @@ namespace L3::program {
 
 		const std::string &get_name() const { return this->label_name; }
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
+		virtual bool get_moves_control_flow() const { return false; };
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
@@ -242,6 +247,7 @@ namespace L3::program {
 		{}
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
+		virtual bool get_moves_control_flow() const { return true; };
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
@@ -252,7 +258,7 @@ namespace L3::program {
 		// always ends with a call, branch, or return
 		// labels can only appear in the beginning
 
-		Vec<BasicBlock *> succ_blocks;
+		Vec<BasicBlock *> succ_blocks; // meaningless for now; ignore
 
 		/* public:
 
@@ -281,7 +287,6 @@ namespace L3::program {
 		public:
 
 		Scope() : parent {}, dict {}, free_refs {} {}
-		Scope(const Scope &other) = delete;
 
 		Vec<Item *> get_all_items() const {
 			Vec<Item *> result;
@@ -506,24 +511,27 @@ namespace L3::program {
 		virtual std::string to_string() const override;
 
 		class Builder {
+			std::string name;
 			Vec<Uptr<BasicBlock>> blocks;
-			Vec<Uptr<Variable>> vars;
 			Vec<Variable *> parameter_vars;
 
 			AggregateScope agg_scope;
 			Scope<BasicBlock> block_scope;
 
-			Opt<Uptr<BasicBlock>> current_block;
+			Uptr<BasicBlock> current_block;
 			// whether it's possible for the last block in the blocks list to
 			// have execution fall through to the current block
 			bool last_block_falls_through;
 
 			public:
-
 			Builder();
+			Pair<L3Function, AggregateScope> get_result();
+			void add_name(std::string name);
+			void add_next_instruction(Uptr<Instruction> &inst);
+			// TODO add parameter vars
 
-			L3Function get_result();
-			void add_next_instruction(Uptr<Instruction> &instruction);
+			private:
+			void store_current_block();
 		};
 	};
 
