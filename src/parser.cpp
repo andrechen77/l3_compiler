@@ -436,10 +436,20 @@ namespace L3::parser {
 	namespace node_processor {
 		using namespace L3::program;
 
+		std::string_view convert_name_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::NameRule));
+			return n.string_view();
+		}
+
+		Uptr<ItemRef<L3Function>> make_l3_function_ref(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::L3FunctionNameRule));
+			return mkuptr<ItemRef<L3Function>>(std::string(convert_name_rule(n[0])));
+		}
+
 		Pair<Uptr<L3Function>, AggregateScope> make_l3_function_with_scope(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::FunctionRule));
 			L3Function::Builder builder;
-			builder.add_name("FUNCTION");
+			builder.add_name(std::string(convert_name_rule(n[0][0])));
 			return builder.get_result();
 		}
 
@@ -481,10 +491,14 @@ namespace L3::parser {
 			}
 		}
 
+		Uptr<L3::program::Program> ptr = node_processor::make_program((*root)[0]);
+		std::cout << ptr->to_string();
+		return ptr;
+
 		// auto p = node_processor::make_program((*root)[0]);
 		// p->get_scope().fake_bind_frees(); // If you want to allow unbound name
 		// p->get_scope().ensure_no_frees(); // If you want to error on unbound name
 		// return p;
-		return {};
+		// return {};
 	}
 }

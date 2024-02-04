@@ -145,7 +145,18 @@ namespace L3::program {
 		return num == this->parameter_vars.size();
 	}
 	std::string L3Function::to_string() const {
-		return "@" + this->name; // TODO wtf
+		std::string result = "define @" + this->name + "(";
+		for (const Variable *var : this->parameter_vars) {
+			result += var->get_name() + ", ";
+		}
+		result += ") {\n";
+		for (const Uptr<BasicBlock> &block : this->blocks) {
+			for (const Uptr<Instruction> &inst : block->instructions) {
+				result += "\t" + inst->to_string();
+			}
+		}
+		result += "}";
+		return result;
 	}
 	L3Function::Builder::Builder() :
 		// default-construct everything else
@@ -210,12 +221,16 @@ namespace L3::program {
 		return false;
 	}
 	std::string ExternalFunction::to_string() const {
-		// TODO
-		exit(1);
+		return "[function std::" + this->name + "]";
 	}
 
 	std::string Program::to_string() const {
-		return "PROGRAM"; // TODO
+		std::string result;
+		for (const Uptr<L3Function> &function : this->l3_functions) {
+			result += function->to_string() + "\n";
+		}
+		return result;
+
 	}
 	Program::Builder::Builder() :
 		// default-construct everything else
