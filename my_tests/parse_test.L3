@@ -1,14 +1,15 @@
 define @main() {
-	%dest <- %src
-	%dest <- %lhs + %rhs
-	%dest <- %lhs > %rhs
-	%dest <- load %addr
-	store %addr <- %src
+	%a <- %b
+	%c <- %d + %e
+	%f <- %g > %h
+	%i <- load %j
+	store %k <- %l
 	:label
 	br :label
-	br %_ :label
+	br %_ :labed
 	br 0 :label
-	call @fun_with_args(%a)
+	call @fun_with_argss(%a)
+	call print()
 	%dest <- call @fun_with_more_args(%a, %b, %c)
 	return
 }

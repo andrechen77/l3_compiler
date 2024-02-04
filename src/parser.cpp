@@ -441,6 +441,8 @@ namespace L3::parser {
 			return n.string_view();
 		}
 
+		Uptr<Expr> make_expr(const ParseNode &n);
+
 		Uptr<ItemRef<Variable>> make_variable_ref(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::VariableRule));
 			return mkuptr<ItemRef<Variable>>(std::string(convert_name_rule(n[0])));
@@ -451,12 +453,20 @@ namespace L3::parser {
 			return mkuptr<ItemRef<L3Function>>(std::string(convert_name_rule(n[0])));
 		}
 
+		Uptr<ItemRef<ExternalFunction>> make_external_function_ref(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::StdFunctionNameRule));
+			return mkuptr<ItemRef<ExternalFunction>>(std::string(n.string_view()));
+		}
+
 		Uptr<ItemRef<InstructionLabel>> make_label_ref(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::LabelRule));
 			return mkuptr<ItemRef<InstructionLabel>>(std::string(convert_name_rule(n[0])));
 		}
 
-		Uptr<Expr> make_expr(const ParseNode &n);
+		Uptr<NumberLiteral> make_number_literal(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::NumberRule));
+			return mkuptr<NumberLiteral>(n.string_view());
+		}
 
 		Uptr<FunctionCall> make_function_call(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::FunctionCallRule));
@@ -476,8 +486,21 @@ namespace L3::parser {
 		}
 
 		Uptr<Expr> make_expr(const ParseNode &n) {
-			// TODO
-			return mkuptr<NumberLiteral>(0);
+			const std::type_info &rule = *n.rule;
+			if (rule == typeid(rules::VariableRule)) {
+				return make_variable_ref(n);
+			} else if (rule == typeid(rules::LabelRule)) {
+				return make_label_ref(n);
+			} else if (rule == typeid(rules::L3FunctionNameRule)) {
+				return make_l3_function_ref(n);
+			} else if (rule == typeid(rules::StdFunctionNameRule)) {
+				return make_external_function_ref(n);
+			} else if (rule == typeid(rules::NumberRule)) {
+				return make_number_literal(n);
+			} else {
+				std::cerr << "Cannot make Expr from this parse node of type " << n.type << "\n";
+				exit(1);
+			}
 		}
 
 		Operator make_operator_rule(const ParseNode &n) {
@@ -651,8 +674,6 @@ namespace L3::parser {
 			}
 			return builder.get_result();
 		}
-
-		// TODO fill out
 	}
 
 	Uptr<L3::program::Program> parse_file(char *fileName, Opt<std::string> parse_tree_output) {
