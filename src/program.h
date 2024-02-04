@@ -516,6 +516,7 @@ namespace L3::program {
 		class Builder {
 			std::string name;
 			Vec<Uptr<BasicBlock>> blocks;
+			Vec<Uptr<Variable>> vars;
 			Vec<Variable *> parameter_vars;
 
 			AggregateScope agg_scope;
@@ -531,6 +532,7 @@ namespace L3::program {
 			Pair<Uptr<L3Function>, AggregateScope> get_result();
 			void add_name(std::string name);
 			void add_next_instruction(Uptr<Instruction> &&inst);
+			void add_parameter(std::string var_name);
 			// TODO add parameter vars
 
 			private:

@@ -147,7 +147,7 @@ namespace L3::program {
 	std::string L3Function::to_string() const {
 		std::string result = "define @" + this->name + "(";
 		for (const Variable *var : this->parameter_vars) {
-			result += var->get_name() + ", ";
+			result += "%" + var->get_name() + ", ";
 		}
 		result += ") {\n";
 		for (const Uptr<BasicBlock> &block : this->blocks) {
@@ -170,11 +170,10 @@ namespace L3::program {
 		}
 
 		// bind all unbound variables to new variable items
-		Vec<Uptr<Variable>> vars;
 		for (std::string name : this->agg_scope.variable_scope.get_free_names()) {
 			Uptr<Variable> var_ptr = mkuptr<Variable>(name);
 			this->agg_scope.variable_scope.resolve_item(mv(name), var_ptr.get());
-			vars.emplace_back(mv(var_ptr));
+			this->vars.emplace_back(mv(var_ptr));
 		}
 
 		// return the result
@@ -182,7 +181,7 @@ namespace L3::program {
 			Uptr<L3Function>(new L3Function( // using constructor instead of make_unique because L3Function's private constructor
 				mv(this->name),
 				mv(this->blocks),
-				mv(vars),
+				mv(this->vars),
 				mv(this->parameter_vars)
 			)),
 			mv(this->agg_scope)
@@ -206,6 +205,12 @@ namespace L3::program {
 			this->store_current_block();
 		}
 		// TODO handle chaining basic blocks together
+	}
+	void L3Function::Builder::add_parameter(std::string var_name) {
+		Uptr<Variable> var_ptr = mkuptr<Variable>(var_name);
+		this->agg_scope.variable_scope.resolve_item(mv(var_name), var_ptr.get());
+		this->parameter_vars.push_back(var_ptr.get());
+		this->vars.emplace_back(mv(var_ptr));
 	}
 	void L3Function::Builder::store_current_block() {
 		this->blocks.push_back(mv(this->current_block));

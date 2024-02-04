@@ -449,7 +449,17 @@ namespace L3::parser {
 		Pair<Uptr<L3Function>, AggregateScope> make_l3_function_with_scope(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::FunctionRule));
 			L3Function::Builder builder;
+
+			// add function name
 			builder.add_name(std::string(convert_name_rule(n[0][0])));
+
+			// add function parameters
+			const ParseNode &def_args = n[1];
+			assert(*def_args.rule == typeid(rules::DefArgsRule));
+			for (const Uptr<ParseNode> &def_arg : def_args.children) {
+				builder.add_parameter(std::string(convert_name_rule((*def_arg)[0])));
+			}
+
 			return builder.get_result();
 		}
 
