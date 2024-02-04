@@ -8,42 +8,58 @@ namespace L3::program {
 	using namespace std_alias;
 
 	template<> std::string ItemRef<Variable>::to_string() const {
-		return "%" + this->get_ref_name();
+		std::string result = "%" + this->get_ref_name();
+		if (!this->referent_nullable) {
+			result += "?";
+		}
+		return result;
 	}
 	template<> void ItemRef<Variable>::bind_to_scope(AggregateScope &agg_scope) {
-		// TODO
+		agg_scope.variable_scope.add_ref(*this);
 	}
 	template<> std::string ItemRef<InstructionLabel>::to_string() const {
-		return ":" + this->get_ref_name();
+		std::string result = ":" + this->get_ref_name();
+		if (!this->referent_nullable) {
+			result += "?";
+		}
+		return result;
 	}
 	template<> void ItemRef<InstructionLabel>::bind_to_scope(AggregateScope &agg_scope) {
-		// TODO
+		agg_scope.label_scope.add_ref(*this);
 	}
 	template<> std::string ItemRef<L3Function>::to_string() const {
-		return "@" + this->get_ref_name();
+		std::string result = "@" + this->get_ref_name();
+		if (!this->referent_nullable) {
+			result += "?";
+		}
+		return result;
 	}
 	template<> void ItemRef<L3Function>::bind_to_scope(AggregateScope &agg_scope) {
-		// TODO
+		agg_scope.l3_function_scope.add_ref(*this);
 	}
 	template<> std::string ItemRef<ExternalFunction>::to_string() const {
-		return this->get_ref_name();
+		std::string result = this->get_ref_name();
+		if (!this->referent_nullable) {
+			result += "?";
+		}
+		return result;
 	}
 	template<> void ItemRef<ExternalFunction>::bind_to_scope(AggregateScope &agg_scope) {
-		// TODO
+		agg_scope.external_function_scope.add_ref(*this);
 	}
 
 	NumberLiteral::NumberLiteral(std::string_view value_str) :
 		value { utils::string_view_to_int<int64_t>(value_str) }
 	{}
 	void NumberLiteral::bind_to_scope(AggregateScope &agg_scope) {
-		// TODO
+		// empty bc literals make no reference to names
 	}
 	std::string NumberLiteral::to_string() const {
 		return std::to_string(this->value);
 	}
 
 	void MemoryLocation::bind_to_scope(AggregateScope &agg_scope) {
-		// TODO
+		this->base->bind_to_scope(agg_scope);
 	}
 	std::string MemoryLocation::to_string() const {
 		return "mem " + this->base->to_string();
@@ -73,7 +89,8 @@ namespace L3::program {
 	}
 
 	void BinaryOperation::bind_to_scope(AggregateScope &agg_scope) {
-		// TODO
+		this->lhs->bind_to_scope(agg_scope);
+		this->rhs->bind_to_scope(agg_scope);
 	}
 	std::string BinaryOperation::to_string() const {
 		return this->lhs->to_string()
@@ -82,7 +99,10 @@ namespace L3::program {
 	}
 
 	void FunctionCall::bind_to_scope(AggregateScope &agg_scope) {
-		// TODO
+		this->callee->bind_to_scope(agg_scope);
+		for (Uptr<Expr> &arg : this->arguments) {
+			arg->bind_to_scope(agg_scope);
+		}
 	}
 	std::string FunctionCall::to_string() const {
 		std::string result = "call " + this->callee->to_string() + "(";
@@ -94,7 +114,9 @@ namespace L3::program {
 	}
 
 	void InstructionReturn::bind_to_scope(AggregateScope &agg_scope) {
-		// TODO
+		if (this->return_value) {
+			(*this->return_value)->bind_to_scope(agg_scope);
+		}
 	}
 	std::string InstructionReturn::to_string() const {
 		std::string result = "return";
@@ -105,7 +127,10 @@ namespace L3::program {
 	}
 
 	void InstructionAssignment::bind_to_scope(AggregateScope &agg_scope) {
-		// TODO
+		if (this->maybe_dest) {
+			(*this->maybe_dest)->bind_to_scope(agg_scope);
+		}
+		this->source->bind_to_scope(agg_scope);
 	}
 	bool InstructionAssignment::get_moves_control_flow() const {
 		// TODO
@@ -121,14 +146,17 @@ namespace L3::program {
 	}
 
 	void InstructionLabel::bind_to_scope(AggregateScope &agg_scope) {
-		// TODO
+		agg_scope.label_scope.resolve_item(this->label_name, this);
 	}
 	std::string InstructionLabel::to_string() const {
 		return ":" + this->label_name;
 	}
 
 	void InstructionBranch::bind_to_scope(AggregateScope &agg_scope) {
-		// TODO
+		if (this->condition) {
+			(*this->condition)->bind_to_scope(agg_scope);
+		}
+		this->label->bind_to_scope(agg_scope);
 	}
 	std::string InstructionBranch::to_string() const {
 		std::string result = "br ";
