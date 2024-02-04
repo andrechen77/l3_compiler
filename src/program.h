@@ -109,7 +109,7 @@ namespace L3::program {
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
 		virtual std::string to_string() const override;
-		virtual void accept(ExprVisitor &v) override {v.visit(*this); }
+		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
 
 	enum struct Operator {
@@ -145,7 +145,7 @@ namespace L3::program {
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
 		virtual std::string to_string() const override;
-		virtual void accept(ExprVisitor &v) override;
+		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
 
 	class FunctionCall : public Expr {
@@ -162,7 +162,7 @@ namespace L3::program {
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
 		virtual std::string to_string() const override;
-		virtual void accept(ExprVisitor &v) override;
+		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
 
 	class InstructionReturn;
@@ -193,7 +193,7 @@ namespace L3::program {
 
 		public:
 
-		InstructionReturn(Uptr<Expr> &&return_value) : return_value { mv(return_value) } {}
+		InstructionReturn(Opt<Uptr<Expr>> &&return_value) : return_value { mv(return_value) } {}
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
 		virtual bool get_moves_control_flow() const { return true; };
@@ -209,7 +209,7 @@ namespace L3::program {
 		public:
 
 		InstructionAssignment(Uptr<Expr> &&expr) : source { mv(expr) } {}
-		InstructionAssignment(Uptr<Expr> &&destination, Uptr<Expr> &&source) :
+		InstructionAssignment(Uptr<Expr> &&source, Uptr<Expr> &&destination) :
 			maybe_dest { Opt(mv(destination)) }, source { mv(source) }
 		{}
 

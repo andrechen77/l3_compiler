@@ -42,6 +42,9 @@ namespace L3::program {
 		return std::to_string(this->value);
 	}
 
+	void MemoryLocation::bind_to_scope(AggregateScope &agg_scope) {
+		// TODO
+	}
 	std::string MemoryLocation::to_string() const {
 		return "mem " + this->base->to_string();
 	}
@@ -69,12 +72,18 @@ namespace L3::program {
 		return map[static_cast<int>(op)];
 	}
 
+	void BinaryOperation::bind_to_scope(AggregateScope &agg_scope) {
+		// TODO
+	}
 	std::string BinaryOperation::to_string() const {
 		return this->lhs->to_string()
 			+ " " + program::to_string(this->op)
 			+ " " + this->rhs->to_string();
 	}
 
+	void FunctionCall::bind_to_scope(AggregateScope &agg_scope) {
+		// TODO
+	}
 	std::string FunctionCall::to_string() const {
 		std::string result = "call " + this->callee->to_string() + "(";
 		for (const Uptr<Expr> &argument : this->arguments) {
@@ -90,7 +99,7 @@ namespace L3::program {
 	std::string InstructionReturn::to_string() const {
 		std::string result = "return";
 		if (this->return_value) {
-			result += "" + (*this->return_value)->to_string();
+			result += " " + (*this->return_value)->to_string();
 		}
 		return result;
 	}
@@ -152,7 +161,7 @@ namespace L3::program {
 		result += ") {\n";
 		for (const Uptr<BasicBlock> &block : this->blocks) {
 			for (const Uptr<Instruction> &inst : block->instructions) {
-				result += "\t" + inst->to_string();
+				result += "\t" + inst->to_string() + "\n";
 			}
 		}
 		result += "}";

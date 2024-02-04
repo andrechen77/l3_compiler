@@ -181,41 +181,41 @@ namespace L3::parser {
 		struct InstructionPureAssignmentRule :
 			interleaved<
 				SpacesRule,
-				VariableRule,
+				VariableRule, //
 				ArrowRule,
-				InexplicableSRule
+				InexplicableSRule //
 			>
 		{};
 
 		struct InstructionOpAssignmentRule :
 			interleaved<
 				SpacesRule,
-				VariableRule,
+				VariableRule, // 0
 				ArrowRule,
-				InexplicableTRule,
-				ArithmeticOperatorRule,
-				InexplicableTRule
+				InexplicableTRule, // 1
+				ArithmeticOperatorRule, // 2
+				InexplicableTRule // 3
 			>
 		{};
 
 		struct InstructionCompareAssignmentRule :
 			interleaved<
 				SpacesRule,
-				VariableRule,
+				VariableRule, // 0
 				ArrowRule,
-				InexplicableTRule,
-				ComparisonOperatorRule,
-				InexplicableTRule
+				InexplicableTRule, // 1
+				ComparisonOperatorRule, // 2
+				InexplicableTRule // 3
 			>
 		{};
 
 		struct InstructionLoadAssignmentRule :
 			interleaved<
 				SpacesRule,
-				VariableRule,
+				VariableRule, // 0
 				ArrowRule,
 				TAO_PEGTL_STRING("load"),
-				VariableRule
+				VariableRule // 1
 			>
 		{};
 
@@ -223,9 +223,9 @@ namespace L3::parser {
 			interleaved<
 				SpacesRule,
 				TAO_PEGTL_STRING("store"),
-				VariableRule,
+				VariableRule, // 0
 				ArrowRule,
-				VariableRule
+				VariableRule // 1
 			>
 		{};
 
@@ -233,7 +233,7 @@ namespace L3::parser {
 			interleaved<
 				SpacesRule,
 				TAO_PEGTL_STRING("return"),
-				opt<InexplicableTRule>
+				opt<InexplicableTRule> // maybe 0
 			>
 		{};
 
@@ -351,7 +351,7 @@ namespace L3::parser {
 				CallArgsRule,
 				DefArgsRule,
 				StdFunctionNameRule,
-				CalleeRule,
+				FunctionCallRule,
 				InstructionPureAssignmentRule,
 				InstructionOpAssignmentRule,
 				InstructionCompareAssignmentRule,
@@ -441,9 +441,181 @@ namespace L3::parser {
 			return n.string_view();
 		}
 
+		Uptr<ItemRef<Variable>> make_variable_ref(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::VariableRule));
+			return mkuptr<ItemRef<Variable>>(std::string(convert_name_rule(n[0])));
+		}
+
 		Uptr<ItemRef<L3Function>> make_l3_function_ref(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::L3FunctionNameRule));
 			return mkuptr<ItemRef<L3Function>>(std::string(convert_name_rule(n[0])));
+		}
+
+		Uptr<ItemRef<InstructionLabel>> make_label_ref(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::LabelRule));
+			return mkuptr<ItemRef<InstructionLabel>>(std::string(convert_name_rule(n[0])));
+		}
+
+		Uptr<Expr> make_expr(const ParseNode &n);
+
+		Uptr<FunctionCall> make_function_call(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::FunctionCallRule));
+
+			// make the callee
+			Uptr<Expr> callee = make_expr(n[0]);
+
+			// add the arguments
+			const ParseNode &call_args = n[1];
+			assert(*call_args.rule == typeid(rules::CallArgsRule));
+			Vec<Uptr<Expr>> arguments;
+			for (const Uptr<ParseNode> &call_arg : call_args.children) {
+				arguments.emplace_back(make_expr(*call_arg));
+			}
+
+			return mkuptr<FunctionCall>(mv(callee), mv(arguments));
+		}
+
+		Uptr<Expr> make_expr(const ParseNode &n) {
+			// TODO
+			return mkuptr<NumberLiteral>(0);
+		}
+
+		Operator make_operator_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::ComparisonOperatorRule)
+				|| *n.rule == typeid(rules::ArithmeticOperatorRule));
+			return str_to_op(n.string_view());
+		}
+
+		Uptr<Instruction> convert_instruction_pure_assignment_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionPureAssignmentRule));
+			return mkuptr<InstructionAssignment>(
+				make_expr(n[1]),
+				make_expr(n[0])
+			);
+		}
+
+		Uptr<Instruction> convert_instruction_op_assignment_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionOpAssignmentRule));
+			return mkuptr<InstructionAssignment>(
+				mkuptr<BinaryOperation>(
+					make_expr(n[1]),
+					make_expr(n[3]),
+					make_operator_rule(n[2])
+				),
+				make_expr(n[0])
+			);
+		}
+
+		Uptr<Instruction> convert_instruction_compare_assignment_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionCompareAssignmentRule));
+			return mkuptr<InstructionAssignment>(
+				mkuptr<BinaryOperation>(
+					make_expr(n[1]),
+					make_expr(n[3]),
+					make_operator_rule(n[2])
+				),
+				make_expr(n[0])
+			);
+		}
+
+		Uptr<Instruction> convert_instruction_load_assignment_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionLoadAssignmentRule));
+			return mkuptr<InstructionAssignment>(
+				mkuptr<MemoryLocation>(
+					make_variable_ref(n[1])
+				),
+				make_expr(n[0])
+			);
+		}
+
+		Uptr<Instruction> convert_instruction_store_assignment_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionStoreAssignmentRule));
+			return mkuptr<InstructionAssignment>(
+				make_expr(n[1]),
+				mkuptr<MemoryLocation>(
+					make_variable_ref(n[0])
+				)
+			);
+		}
+
+		Uptr<Instruction> convert_instruction_return_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionReturnRule));
+			if (n.children.empty()) {
+				// return without value
+				return mkuptr<InstructionReturn>(Opt<Uptr<Expr>>());
+			} else {
+				// return with value
+				return mkuptr<InstructionReturn>(
+					make_expr(n[0])
+				);
+			}
+		}
+
+		Uptr<Instruction> convert_instruction_label_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionLabelRule));
+			return mkuptr<InstructionLabel>(
+				std::string(convert_name_rule(n[0][0]))
+			);
+		}
+
+		Uptr<Instruction> convert_instruction_branch_uncond_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionBranchUncondRule));
+			return mkuptr<InstructionBranch>(
+				make_label_ref(n[0])
+			);
+		}
+
+		Uptr<Instruction> convert_instruction_branch_cond_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionBranchCondRule));
+			return mkuptr<InstructionBranch>(
+				make_label_ref(n[1]),
+				make_expr(n[0])
+			);
+		}
+
+		Uptr<Instruction> convert_instruction_call_void_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionCallVoidRule));
+			return mkuptr<InstructionAssignment>(
+				make_function_call(n[0])
+			);
+		}
+
+		Uptr<Instruction> convert_instruction_call_val_rule(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::InstructionCallValRule));
+			return mkuptr<InstructionAssignment>(
+				make_function_call(n[1]),
+				make_expr(n[0])
+			);
+		}
+
+		Uptr<Instruction> make_instruction(const ParseNode &n) {
+			const std::type_info &rule = *n.rule;
+			if (rule == typeid(rules::InstructionPureAssignmentRule)) {
+				return convert_instruction_pure_assignment_rule(n);
+			} else if (rule == typeid(rules::InstructionOpAssignmentRule)) {
+				return convert_instruction_op_assignment_rule(n);
+			} else if (rule == typeid(rules::InstructionCompareAssignmentRule)) {
+				return convert_instruction_compare_assignment_rule(n);
+			} else if (rule == typeid(rules::InstructionLoadAssignmentRule)) {
+				return convert_instruction_load_assignment_rule(n);
+			} else if (rule == typeid(rules::InstructionStoreAssignmentRule)) {
+				return convert_instruction_store_assignment_rule(n);
+			} else if (rule == typeid(rules::InstructionReturnRule)) {
+				return convert_instruction_return_rule(n);
+			} else if (rule == typeid(rules::InstructionLabelRule)) {
+				return convert_instruction_label_rule(n);
+			} else if (rule == typeid(rules::InstructionBranchUncondRule)) {
+				return convert_instruction_branch_uncond_rule(n);
+			} else if (rule == typeid(rules::InstructionBranchCondRule)) {
+				return convert_instruction_branch_cond_rule(n);
+			} else if (rule == typeid(rules::InstructionCallVoidRule)) {
+				return convert_instruction_call_void_rule(n);
+			} else if (rule == typeid(rules::InstructionCallValRule)) {
+				return convert_instruction_call_val_rule(n);
+			} else {
+				std::cerr << "Cannot make Instruction from this parse node.";
+				exit(1);
+			}
 		}
 
 		Pair<Uptr<L3Function>, AggregateScope> make_l3_function_with_scope(const ParseNode &n) {
@@ -458,6 +630,13 @@ namespace L3::parser {
 			assert(*def_args.rule == typeid(rules::DefArgsRule));
 			for (const Uptr<ParseNode> &def_arg : def_args.children) {
 				builder.add_parameter(std::string(convert_name_rule((*def_arg)[0])));
+			}
+
+			// add instructions
+			const ParseNode &instructions = n[2];
+			assert(*instructions.rule == typeid(rules::InstructionsRule));
+			for (const Uptr<ParseNode> &inst : instructions.children) {
+				builder.add_next_instruction(make_instruction(*inst));
 			}
 
 			return builder.get_result();
