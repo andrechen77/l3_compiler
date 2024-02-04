@@ -10,14 +10,26 @@ namespace L3::program {
 	template<> std::string ItemRef<Variable>::to_string() const {
 		return "%" + this->get_ref_name();
 	}
+	template<> void ItemRef<Variable>::bind_to_scope(AggregateScope &agg_scope) {
+		// TODO
+	}
 	template<> std::string ItemRef<InstructionLabel>::to_string() const {
 		return ":" + this->get_ref_name();
+	}
+	template<> void ItemRef<InstructionLabel>::bind_to_scope(AggregateScope &agg_scope) {
+		// TODO
 	}
 	template<> std::string ItemRef<L3Function>::to_string() const {
 		return "@" + this->get_ref_name();
 	}
+	template<> void ItemRef<L3Function>::bind_to_scope(AggregateScope &agg_scope) {
+		// TODO
+	}
 	template<> std::string ItemRef<ExternalFunction>::to_string() const {
 		return this->get_ref_name();
+	}
+	template<> void ItemRef<ExternalFunction>::bind_to_scope(AggregateScope &agg_scope) {
+		// TODO
 	}
 
 	NumberLiteral::NumberLiteral(std::string_view value_str) :
@@ -118,6 +130,12 @@ namespace L3::program {
 		return result;
 	}
 
+	void AggregateScope::set_parent(AggregateScope &parent) {
+		this->variable_scope.set_parent(parent.variable_scope);
+		this->label_scope.set_parent(parent.label_scope);
+		this->l3_function_scope.set_parent(parent.l3_function_scope);
+		this->external_function_scope.set_parent(parent.external_function_scope);
+	}
 
 	std::string Variable::to_string() const {
 		return this->name;
@@ -127,14 +145,14 @@ namespace L3::program {
 		return num == this->parameter_vars.size();
 	}
 	std::string L3Function::to_string() const {
-		return "@" + this->name;
+		return "@" + this->name; // TODO wtf
 	}
 	L3Function::Builder::Builder() :
 		// default-construct everything else
 		current_block { mkuptr<BasicBlock>() },
 		last_block_falls_through { false }
 	{}
-	Pair<L3Function, AggregateScope> L3Function::Builder::get_result() {
+	Pair<Uptr<L3Function>, AggregateScope> L3Function::Builder::get_result() {
 		// store the current block
 		if (!this->current_block->instructions.empty()) {
 			this->store_current_block();
@@ -150,7 +168,7 @@ namespace L3::program {
 
 		// return the result
 		return std::make_pair(
-			mv(L3Function(
+			Uptr<L3Function>(new L3Function( // using constructor instead of make_unique because L3Function's private constructor
 				mv(this->name),
 				mv(this->blocks),
 				mv(vars),
@@ -162,7 +180,7 @@ namespace L3::program {
 	void L3Function::Builder::add_name(std::string name) {
 		this->name = mv(name);
 	}
-	void L3Function::Builder::add_next_instruction(Uptr<Instruction> &inst) {
+	void L3Function::Builder::add_next_instruction(Uptr<Instruction> &&inst) {
 		/* if (this->last_block_falls_through) {
 			this->last_block_falls_through = false;
 			this->blocks.back()->succ_blocks.push_back((*this->current_block).get());
@@ -194,5 +212,36 @@ namespace L3::program {
 	std::string ExternalFunction::to_string() const {
 		// TODO
 		exit(1);
+	}
+
+	std::string Program::to_string() const {
+		return "PROGRAM"; // TODO
+	}
+	Program::Builder::Builder() :
+		// default-construct everything else
+		main_function_ref { mkuptr<ItemRef<L3Function>>("main") }
+	{
+		// TODO add external functions
+		// Vec<Uptr<ExternalFunction>> external_functions;
+		/* for (std::string name : this->agg_scope.external_function_scope.get_free_names()) {
+			Uptr<Variable> var_ptr = mkuptr<Variable>(name);
+			this->agg_scope.variable_scope.resolve_item(mv(name), var_ptr.get());
+			vars.emplace_back(mv(var_ptr));
+		} */
+	}
+	Uptr<Program> Program::Builder::get_result() {
+		// TODO verify no free names
+
+		// return the result
+		return Uptr<Program>(new Program(
+			mv(this->l3_functions),
+			mv(this->external_functions),
+			mv(this->main_function_ref)
+		));
+	}
+	void Program::Builder::add_l3_function(Uptr<L3Function> &&function, AggregateScope &fun_scope) {
+		fun_scope.set_parent(this->agg_scope);
+		this->agg_scope.l3_function_scope.resolve_item(function->get_name(), function.get());
+		this->l3_functions.push_back(mv(function));
 	}
 }

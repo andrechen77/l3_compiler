@@ -463,6 +463,8 @@ namespace L3::program {
 		Scope<InstructionLabel> label_scope;
 		Scope<L3Function> l3_function_scope;
 		Scope<ExternalFunction> external_function_scope;
+
+		void set_parent(AggregateScope &parent);
 	};
 
 	class Variable {
@@ -490,6 +492,7 @@ namespace L3::program {
 		Vec<Uptr<BasicBlock>> blocks;
 		Vec<Uptr<Variable>> vars;
 		Vec<Variable *> parameter_vars;
+		AggregateScope agg_scope;
 
 		explicit L3Function(
 			std::string name,
@@ -525,9 +528,9 @@ namespace L3::program {
 
 			public:
 			Builder();
-			Pair<L3Function, AggregateScope> get_result();
+			Pair<Uptr<L3Function>, AggregateScope> get_result();
 			void add_name(std::string name);
-			void add_next_instruction(Uptr<Instruction> &inst);
+			void add_next_instruction(Uptr<Instruction> &&inst);
 			// TODO add parameter vars
 
 			private:
@@ -550,9 +553,32 @@ namespace L3::program {
 	class Program {
 		Vec<Uptr<L3Function>> l3_functions;
 		Vec<Uptr<ExternalFunction>> external_functions;
+		Uptr<ItemRef<L3Function>> main_function_ref;
+
+		explicit Program(
+			Vec<Uptr<L3Function>> &&l3_functions,
+			Vec<Uptr<ExternalFunction>> &&external_functions,
+			Uptr<ItemRef<L3Function>> &&main_function_ref
+		) :
+			l3_functions { mv(l3_functions) },
+			external_functions { mv(external_functions) },
+			main_function_ref { mv(main_function_ref) }
+		{}
 
 		public:
 
 		std::string to_string() const;
+
+		class Builder {
+			Vec<Uptr<L3Function>> l3_functions;
+			Uptr<ItemRef<L3Function>> main_function_ref;
+			Vec<Uptr<ExternalFunction>> external_functions;
+			AggregateScope agg_scope;
+
+			public:
+			Builder();
+			Uptr<Program> get_result();
+			void add_l3_function(Uptr<L3Function> &&function, AggregateScope &fun_scope);
+		};
 	};
 }

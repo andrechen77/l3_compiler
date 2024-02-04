@@ -436,6 +436,23 @@ namespace L3::parser {
 	namespace node_processor {
 		using namespace L3::program;
 
+		Pair<Uptr<L3Function>, AggregateScope> make_l3_function_with_scope(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::FunctionRule));
+			L3Function::Builder builder;
+			builder.add_name("FUNCTION");
+			return builder.get_result();
+		}
+
+		Uptr<Program> make_program(const ParseNode &n) {
+			assert(*n.rule == typeid(rules::ProgramRule));
+			Program::Builder builder;
+			for (const Uptr<ParseNode> &child : n.children) {
+				auto [function, agg_scope] = make_l3_function_with_scope(*child);
+				builder.add_l3_function(mv(function), agg_scope);
+			}
+			return builder.get_result();
+		}
+
 		// TODO fill out
 	}
 
