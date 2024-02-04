@@ -1,7 +1,7 @@
 CPP_FILES			:= $(wildcard src/*.cpp)
 OBJ_FILES			:= $(addprefix obj/,$(notdir $(CPP_FILES:.cpp=.o)))
 CC_FLAGS			:= --std=c++17 -I./src -I../lib/PEGTL/include -I../lib -g3 -DDEBUG -pedantic -pedantic-errors -Werror=pedantic
-LD_FLAGS			:= 
+LD_FLAGS			:=
 CC						:= g++
 PL_CLASS  		:= L3
 DST_PL_CLASS 	:= L2
@@ -54,5 +54,6 @@ copy_simone_bin:
 clean:
 	rm -fr bin obj *.out *.o core.* `find tests -iname *.tmp`
 	rm -fr *.$(DST_PL_CLASS)
+	-rm -fr parse_tree.dot parse_tree.svg
 
 .PHONY: dirs $(COMPILER) oracle oracle_new rm_tests_without_oracle test test_new test_programs performance clean
