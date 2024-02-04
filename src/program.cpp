@@ -33,19 +33,25 @@ namespace L3::program {
 		return "mem " + this->base->to_string();
 	}
 
-	ComparisonOperator str_to_cmp_op(std::string_view str) {
-		static const Map<std::string, ComparisonOperator> map {
-			{ "<", ComparisonOperator::lt },
-			{ "<=", ComparisonOperator::le },
-			{ "=", ComparisonOperator::eq },
-			{ ">=", ComparisonOperator::ge },
-			{ ">", ComparisonOperator::gt }
+	Operator str_to_op(std::string_view str) {
+		static const Map<std::string, Operator> map {
+			{ "<", Operator::lt },
+			{ "<=", Operator::le },
+			{ "=", Operator::eq },
+			{ ">=", Operator::ge },
+			{ ">", Operator::gt },
+			{ "+", Operator::plus },
+			{ "-", Operator::minus },
+			{ "*", Operator::times },
+			{ "&", Operator::bitwise_and },
+			{ "<<", Operator::lshift },
+			{ ">>", Operator::rshift }
 		};
 		return map.find(str)->second;
 	}
-	std::string to_string(ComparisonOperator op) {
+	std::string to_string(Operator op) {
 		static const std::string map[] = {
-			"<", "<=", "=", ">=", ">"
+			"<", "<=", "=", ">=", ">", "+", "-", "*", "&", "<<", ">>"
 		};
 		return map[static_cast<int>(op)];
 	}

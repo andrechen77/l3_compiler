@@ -89,24 +89,30 @@ namespace L3::program {
 		// virtual void accept(ExprVisitor &v) override {v.visit(*this); }
 	};
 
-	enum struct ComparisonOperator {
+	enum struct Operator {
 		lt,
 		le,
 		eq,
 		ge,
-		gt
+		gt,
+		plus,
+		minus,
+		times,
+		bitwise_and,
+		lshift,
+		rshift
 	};
-	ComparisonOperator str_to_cmp_op(std::string_view str);
-	std::string to_string(ComparisonOperator op);
+	Operator str_to_op(std::string_view str);
+	std::string to_string(Operator op);
 
 	class BinaryOperation : public Expr {
 		Uptr<Expr> lhs;
 		Uptr<Expr> rhs;
-		ComparisonOperator op;
+		Operator op;
 
 		public:
 
-		BinaryOperation(Uptr<Expr> &&lhs, Uptr<Expr> &&rhs, ComparisonOperator op) :
+		BinaryOperation(Uptr<Expr> &&lhs, Uptr<Expr> &&rhs, Operator op) :
 			lhs { mv(lhs) },
 			rhs { mv(rhs) },
 			op { op }
