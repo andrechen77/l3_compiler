@@ -131,7 +131,7 @@ namespace L3::program {
 	}
 	L3Function::Builder::Builder() :
 		// default-construct everything else
-		current_block { std::make_unique<BasicBlock>() },
+		current_block { mkuptr<BasicBlock>() },
 		last_block_falls_through { false }
 	{}
 	Pair<L3Function, AggregateScope> L3Function::Builder::get_result() {
@@ -143,7 +143,7 @@ namespace L3::program {
 		// bind all unbound variables to new variable items
 		Vec<Uptr<Variable>> vars;
 		for (std::string name : this->agg_scope.variable_scope.get_free_names()) {
-			Uptr<Variable> var_ptr = std::make_unique<Variable>(name);
+			Uptr<Variable> var_ptr = mkuptr<Variable>(name);
 			this->agg_scope.variable_scope.resolve_item(mv(name), var_ptr.get());
 			vars.emplace_back(mv(var_ptr));
 		}
@@ -180,7 +180,7 @@ namespace L3::program {
 	}
 	void L3Function::Builder::store_current_block() {
 		this->blocks.push_back(mv(this->current_block));
-		this->current_block = std::make_unique<BasicBlock>();
+		this->current_block = mkuptr<BasicBlock>();
 	}
 
 	bool ExternalFunction::verify_argument_num(int num) const {

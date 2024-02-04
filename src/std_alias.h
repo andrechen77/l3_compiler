@@ -11,6 +11,11 @@ namespace std_alias {
 	template<typename T>
 	using Uptr = std::unique_ptr<T>;
 
+	template<typename T, typename... Args>
+	Uptr<T> mkuptr(Args... args) {
+		return std::make_unique<T>(std::forward<Args>(args)...);
+	}
+
 	template<typename T>
 	using Vec = std::vector<T>;
 
