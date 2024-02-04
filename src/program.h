@@ -8,17 +8,39 @@
 namespace L3::program {
 	using namespace std_alias;
 
+	template<typename Item> class ItemRef;
+	class Variable;
+	class InstructionLabel;
+	class L3Function;
+	class ExternalFunction;
+	class NumberLiteral;
+	class MemoryLocation;
+	class BinaryOperation;
+	class FunctionCall;
+
+	// interface
+	class ExprVisitor {
+		public:
+		virtual void visit(ItemRef<Variable> &expr) = 0;
+		virtual void visit(ItemRef<InstructionLabel> &expr) = 0;
+		virtual void visit(ItemRef<L3Function> &expr) = 0;
+		virtual void visit(ItemRef<ExternalFunction> &expr) = 0;
+		virtual void visit(NumberLiteral &expr) = 0;
+		virtual void visit(MemoryLocation &expr) = 0;
+		virtual void visit(BinaryOperation &expr) = 0;
+		virtual void visit(FunctionCall &expr) = 0;
+	};
+
 	struct AggregateScope;
 
 	// interface
 	class Expr {
 		public:
-
 		// virtual Set<Variable *> get_vars_on_read() const { return {}; }
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const { return {}; }
 		virtual void bind_to_scope(AggregateScope &agg_scope) = 0;
 		virtual std::string to_string() const = 0;
-		// virtual void accept(ExprVisitor &v) = 0;
+		virtual void accept(ExprVisitor &v) = 0;
 	};
 
 	// instantiations must implement the virtual methods
@@ -56,7 +78,7 @@ namespace L3::program {
 			}
 		}
 		virtual std::string to_string() const override;
-		// virtual void accept(ExprVisitor &v) override { v.visit(*this); }
+		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
 
 	class NumberLiteral : public Expr {
@@ -70,7 +92,7 @@ namespace L3::program {
 		int64_t get_value() const { return this->value; }
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
 		virtual std::string to_string() const override;
-		// virtual void accept(ExprVisitor &v) override { v.visit(*this); }
+		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
 
 	class Variable;
@@ -86,7 +108,7 @@ namespace L3::program {
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
 		virtual std::string to_string() const override;
-		// virtual void accept(ExprVisitor &v) override {v.visit(*this); }
+		virtual void accept(ExprVisitor &v) override {v.visit(*this); }
 	};
 
 	enum struct Operator {
@@ -122,7 +144,7 @@ namespace L3::program {
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
 		virtual std::string to_string() const override;
-		// virtual void accept(ExprVisitor &v) override;
+		virtual void accept(ExprVisitor &v) override;
 	};
 
 	class FunctionCall : public Expr {
@@ -139,7 +161,7 @@ namespace L3::program {
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
 		virtual std::string to_string() const override;
-		// virtual void accept(ExprVisitor &v) override;
+		virtual void accept(ExprVisitor &v) override;
 	};
 
 	class InstructionReturn;
@@ -483,7 +505,7 @@ namespace L3::program {
 		// virtual bool get_never_returns() const override;
 		virtual std::string to_string() const override;
 
-		/* class Builder {
+		class Builder {
 			Vec<Uptr<BasicBlock>> blocks;
 			Vec<Uptr<Variable>> vars;
 			Vec<Variable *> parameter_vars;
@@ -496,15 +518,13 @@ namespace L3::program {
 			// have execution fall through to the current block
 			bool last_block_falls_through;
 
-			friend class BuilderHelper;
-
 			public:
 
 			Builder();
 
 			L3Function get_result();
 			void add_next_instruction(Uptr<Instruction> &instruction);
-		}; */
+		};
 	};
 
 	class ExternalFunction : public Function {
