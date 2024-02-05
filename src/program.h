@@ -5,6 +5,7 @@
 #include <string_view>
 #include <iostream>
 #include <typeinfo>
+#include <variant>
 
 namespace L3::program {
 	using namespace std_alias;
@@ -12,6 +13,7 @@ namespace L3::program {
 	template<typename Item> class ItemRef;
 	class Variable;
 	class InstructionLabel;
+	class Function;
 	class L3Function;
 	class ExternalFunction;
 	class NumberLiteral;
@@ -33,6 +35,13 @@ namespace L3::program {
 	};
 
 	struct AggregateScope;
+	struct ComputationNode;
+	using ComputationTree = std::variant<
+		Variable *,
+		Function *,
+		int64_t,
+		Uptr<ComputationNode>
+	>;
 
 	// interface
 	class Expr {
@@ -40,6 +49,7 @@ namespace L3::program {
 		// virtual Set<Variable *> get_vars_on_read() const { return {}; }
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const { return {}; }
 		virtual void bind_to_scope(AggregateScope &agg_scope) = 0;
+		virtual ComputationTree to_computation_tree() const = 0;
 		virtual std::string to_string() const = 0;
 		virtual void accept(ExprVisitor &v) = 0;
 	};
@@ -78,6 +88,7 @@ namespace L3::program {
 				return this->free_name;
 			}
 		}
+		virtual ComputationTree to_computation_tree() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
@@ -92,6 +103,7 @@ namespace L3::program {
 
 		int64_t get_value() const { return this->value; }
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
+		virtual ComputationTree to_computation_tree() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
@@ -108,6 +120,7 @@ namespace L3::program {
 		// virtual Set<Variable *> get_vars_on_read() const override;
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
+		virtual ComputationTree to_computation_tree() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
@@ -144,6 +157,7 @@ namespace L3::program {
 		// virtual Set<Variable *> get_vars_on_read() const override;
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
+		virtual ComputationTree to_computation_tree() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
@@ -161,6 +175,7 @@ namespace L3::program {
 		// virtual Set<Variable *> get_vars_on_read() const override;
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
+		virtual ComputationTree to_computation_tree() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
@@ -186,6 +201,7 @@ namespace L3::program {
 		public:
 		virtual void bind_to_scope(AggregateScope &agg_scope) = 0;
 		virtual bool get_moves_control_flow() const = 0;
+		virtual ComputationTree to_computation_tree() const = 0;
 		virtual std::string to_string() const = 0;
 		virtual void accept(InstructionVisitor &v) = 0;
 	};
@@ -198,6 +214,7 @@ namespace L3::program {
 		InstructionReturn(Opt<Uptr<Expr>> &&return_value) : return_value { mv(return_value) } {}
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
+		virtual ComputationTree to_computation_tree() const override;
 		virtual bool get_moves_control_flow() const { return true; };
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -212,10 +229,11 @@ namespace L3::program {
 
 		InstructionAssignment(Uptr<Expr> &&expr) : source { mv(expr) } {}
 		InstructionAssignment(Uptr<Expr> &&source, Uptr<ItemRef<Variable>> &&destination) :
-			maybe_dest { Opt(mv(destination)) }, source { mv(source) }
+			maybe_dest { mv(destination) }, source { mv(source) }
 		{}
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
+		virtual ComputationTree to_computation_tree() const override;
 		virtual bool get_moves_control_flow() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -232,6 +250,7 @@ namespace L3::program {
 		{}
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
+		virtual ComputationTree to_computation_tree() const override;
 		virtual bool get_moves_control_flow() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -246,6 +265,7 @@ namespace L3::program {
 
 		const std::string &get_name() const { return this->label_name; }
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
+		virtual ComputationTree to_computation_tree() const override;
 		virtual bool get_moves_control_flow() const { return false; };
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -266,8 +286,76 @@ namespace L3::program {
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
 		virtual bool get_moves_control_flow() const { return true; };
+		virtual ComputationTree to_computation_tree() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
+	};
+
+	// represents a computation from a series of instructions, starting with
+	// the leaves as input and ultimately outputting the root.
+	// Instantiating just this class instead of one of its subclasses represents
+	// a no-op.
+	struct ComputationNode {
+		Opt<Variable *> destination; // none if this computation is only for its side effects
+
+		ComputationNode(Opt<Variable *> destination) : destination { destination } {}
+	};
+
+	struct MoveComputation : ComputationNode {
+		ComputationTree source;
+
+		MoveComputation(Opt<Variable *> destination, ComputationTree source) :
+			ComputationNode(destination), source { mv(source) }
+		{}
+	};
+
+	struct BinaryComputation : ComputationNode {
+		Operator op;
+		ComputationTree lhs;
+		ComputationTree rhs;
+
+		BinaryComputation(Opt<Variable *> destination, Operator op, ComputationTree lhs, ComputationTree rhs) :
+			ComputationNode(destination), op {op}, lhs { mv(lhs) }, rhs { mv(rhs) }
+		{}
+	};
+
+	struct CallComputation : ComputationNode {
+		ComputationTree function;
+		Vec<ComputationTree> arguments;
+
+		CallComputation(Opt<Variable *> destination, ComputationTree function, Vec<ComputationTree> arguments) :
+			ComputationNode(destination), function { mv(function) }, arguments { mv(arguments) }
+		{}
+	};
+
+	struct LoadComputation : ComputationNode {
+		ComputationTree address;
+
+		LoadComputation(Opt<Variable *> destination, ComputationTree address) :
+			ComputationNode(destination), address { mv(address) }
+		{}
+	};
+
+	struct StoreComputation : ComputationNode {
+		ComputationTree address;
+		ComputationTree value;
+
+		// note that there is no destination argument
+		StoreComputation(ComputationTree address, ComputationTree value) :
+			ComputationNode({}), address { mv(address) }, value { mv(value) }
+		{}
+	};
+
+	struct ReturnBranchComputation : ComputationNode {
+		Opt<ComputationTree> value;
+
+		// note that there is no destination argument
+		ReturnBranchComputation() :
+			ComputationNode({}), value {}
+		{}
+		ReturnBranchComputation(ComputationTree value) :
+			ComputationNode({}), value { mv(value) }
+		{}
 	};
 
 	struct BasicBlock {

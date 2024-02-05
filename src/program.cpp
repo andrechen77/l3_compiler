@@ -17,6 +17,13 @@ namespace L3::program {
 	template<> void ItemRef<Variable>::bind_to_scope(AggregateScope &agg_scope) {
 		agg_scope.variable_scope.add_ref(*this);
 	}
+	template<> ComputationTree ItemRef<Variable>::to_computation_tree() const {
+		if (!this->referent_nullable) {
+			std::cerr << "Error: can't convert free variable name to computation tree.\n";
+			exit(1);
+		}
+		return this->referent_nullable;
+	}
 	template<> std::string ItemRef<InstructionLabel>::to_string() const {
 		std::string result = ":" + this->get_ref_name();
 		if (!this->referent_nullable) {
@@ -26,6 +33,10 @@ namespace L3::program {
 	}
 	template<> void ItemRef<InstructionLabel>::bind_to_scope(AggregateScope &agg_scope) {
 		agg_scope.label_scope.add_ref(*this);
+	}
+	template<> ComputationTree ItemRef<InstructionLabel>::to_computation_tree() const {
+		std::cerr << "Error: can't convert label name to computation tree.\n";
+		exit(1);
 	}
 	template<> std::string ItemRef<L3Function>::to_string() const {
 		std::string result = "@" + this->get_ref_name();
@@ -37,6 +48,13 @@ namespace L3::program {
 	template<> void ItemRef<L3Function>::bind_to_scope(AggregateScope &agg_scope) {
 		agg_scope.l3_function_scope.add_ref(*this);
 	}
+	template<> ComputationTree ItemRef<L3Function>::to_computation_tree() const {
+		if (!this->referent_nullable) {
+			std::cerr << "Error: can't convert free L3 function name to computation tree.\n";
+			exit(1);
+		}
+		return this->referent_nullable;
+	}
 	template<> std::string ItemRef<ExternalFunction>::to_string() const {
 		std::string result = this->get_ref_name();
 		if (!this->referent_nullable) {
@@ -47,6 +65,13 @@ namespace L3::program {
 	template<> void ItemRef<ExternalFunction>::bind_to_scope(AggregateScope &agg_scope) {
 		agg_scope.external_function_scope.add_ref(*this);
 	}
+	template<> ComputationTree ItemRef<ExternalFunction>::to_computation_tree() const {
+		if (!this->referent_nullable) {
+			std::cerr << "Error: can't convert free external function name to computation tree.\n";
+			exit(1);
+		}
+		return this->referent_nullable;
+	}
 
 	NumberLiteral::NumberLiteral(std::string_view value_str) :
 		value { utils::string_view_to_int<int64_t>(value_str) }
@@ -54,12 +79,21 @@ namespace L3::program {
 	void NumberLiteral::bind_to_scope(AggregateScope &agg_scope) {
 		// empty bc literals make no reference to names
 	}
+	ComputationTree NumberLiteral::to_computation_tree() const {
+		return this->value;
+	}
 	std::string NumberLiteral::to_string() const {
 		return std::to_string(this->value);
 	}
 
 	void MemoryLocation::bind_to_scope(AggregateScope &agg_scope) {
 		this->base->bind_to_scope(agg_scope);
+	}
+	ComputationTree MemoryLocation::to_computation_tree() const {
+		return mkuptr<LoadComputation>(
+			Opt<Variable *>(),
+			this->base->to_computation_tree()
+		);
 	}
 	std::string MemoryLocation::to_string() const {
 		return "load " + this->base->to_string();
@@ -92,6 +126,14 @@ namespace L3::program {
 		this->lhs->bind_to_scope(agg_scope);
 		this->rhs->bind_to_scope(agg_scope);
 	}
+	ComputationTree BinaryOperation::to_computation_tree() const {
+		return mkuptr<BinaryComputation>(
+			Opt<Variable *>(),
+			this->op,
+			mv(this->lhs->to_computation_tree()),
+			mv(this->rhs->to_computation_tree())
+		);
+	}
 	std::string BinaryOperation::to_string() const {
 		return this->lhs->to_string()
 			+ " " + program::to_string(this->op)
@@ -103,6 +145,17 @@ namespace L3::program {
 		for (Uptr<Expr> &arg : this->arguments) {
 			arg->bind_to_scope(agg_scope);
 		}
+	}
+	ComputationTree FunctionCall::to_computation_tree() const {
+		Vec<ComputationTree> arguments;
+		for (const Uptr<Expr> &argument : this->arguments) {
+			arguments.emplace_back(argument->to_computation_tree());
+		}
+		return mkuptr<CallComputation>(
+			Opt<Variable *>(),
+			mv(this->callee->to_computation_tree()),
+			mv(arguments)
+		);
 	}
 	std::string FunctionCall::to_string() const {
 		std::string result = "call " + this->callee->to_string() + "(";
@@ -118,6 +171,15 @@ namespace L3::program {
 			(*this->return_value)->bind_to_scope(agg_scope);
 		}
 	}
+	ComputationTree InstructionReturn::to_computation_tree() const {
+		if (this->return_value) {
+			return mkuptr<ReturnBranchComputation>(
+				(*this->return_value)->to_computation_tree()
+			);
+		} else {
+			return mkuptr<ReturnBranchComputation>();
+		}
+	}
 	std::string InstructionReturn::to_string() const {
 		std::string result = "return";
 		if (this->return_value) {
@@ -131,6 +193,23 @@ namespace L3::program {
 			(*this->maybe_dest)->bind_to_scope(agg_scope);
 		}
 		this->source->bind_to_scope(agg_scope);
+	}
+	ComputationTree InstructionAssignment::to_computation_tree() const {
+		ComputationTree tree = this->source->to_computation_tree();
+		// put a destination on the top node; or make a MoveComputation if
+		// the tree is actually a leaf
+		if (Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&tree)) {
+			if (this->maybe_dest) {
+				(*node)->destination = (*this->maybe_dest)->get_referent().value(); // .value() to assert that the destination variable must be bound if it exists
+			} // if there is no destination, just leave it blank
+			return mv(*node);
+		} else {
+			// make a MoveComputation
+			return mkuptr<MoveComputation>(
+				(*this->maybe_dest)->get_referent().value(), // .value() to assert that there must be a destination; otherwise what's the point (all possibility of side effects was handled in the branch checking if the tree was a ComputationNode)
+				mv(tree)
+			);
+		}
 	}
 	bool InstructionAssignment::get_moves_control_flow() const {
 		// FUTURE only the source value can have a call
@@ -156,6 +235,12 @@ namespace L3::program {
 		this->base->bind_to_scope(agg_scope);
 		this->source->bind_to_scope(agg_scope);
 	}
+	ComputationTree InstructionStore::to_computation_tree() const {
+		return mkuptr<StoreComputation>(
+			this->base->to_computation_tree(),
+			this->source->to_computation_tree()
+		);
+	}
 	bool InstructionStore::get_moves_control_flow() const {
 		// FUTURE the grammar prohibits a store instruction from having any kind
 		// of source expression other than a variable, so we know for sure that
@@ -170,6 +255,10 @@ namespace L3::program {
 	void InstructionLabel::bind_to_scope(AggregateScope &agg_scope) {
 		agg_scope.label_scope.resolve_item(this->label_name, this);
 	}
+	ComputationTree InstructionLabel::to_computation_tree() const {
+		// InstructionLabels don't do anything, so output a no-op tree
+		return mkuptr<ComputationNode>(Opt<Variable *>());
+	}
 	std::string InstructionLabel::to_string() const {
 		return ":" + this->label_name;
 	}
@@ -179,6 +268,15 @@ namespace L3::program {
 			(*this->condition)->bind_to_scope(agg_scope);
 		}
 		this->label->bind_to_scope(agg_scope);
+	}
+	ComputationTree InstructionBranch::to_computation_tree() const {
+		if (this->condition) {
+			return mkuptr<ReturnBranchComputation>(
+				(*this->condition)->to_computation_tree()
+			);
+		} else {
+			return mkuptr<ReturnBranchComputation>();
+		}
 	}
 	std::string InstructionBranch::to_string() const {
 		std::string result = "br ";
