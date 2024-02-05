@@ -483,13 +483,13 @@ namespace L3::program {
 		// default-construct everything else
 		main_function_ref { mkuptr<ItemRef<L3Function>>("main") }
 	{
-		// TODO add external functions
-		// Vec<Uptr<ExternalFunction>> external_functions;
-		/* for (std::string name : this->agg_scope.external_function_scope.get_free_names()) {
-			Uptr<Variable> var_ptr = mkuptr<Variable>(name);
-			this->agg_scope.variable_scope.resolve_item(mv(name), var_ptr.get());
-			vars.emplace_back(mv(var_ptr));
-		} */
+		for (Uptr<ExternalFunction> &function_ptr : generate_std_functions()) {
+			this->agg_scope.external_function_scope.resolve_item(
+				function_ptr->get_name(),
+				function_ptr.get()
+			);
+			this->external_functions.emplace_back(mv(function_ptr));
+		}
 	}
 	Uptr<Program> Program::Builder::get_result() {
 		// TODO verify no free names
@@ -505,5 +505,15 @@ namespace L3::program {
 		fun_scope.set_parent(this->agg_scope);
 		this->agg_scope.l3_function_scope.resolve_item(function->get_name(), function.get());
 		this->l3_functions.push_back(mv(function));
+	}
+
+	Vec<Uptr<ExternalFunction>> generate_std_functions() {
+		Vec<Uptr<ExternalFunction>> result;
+		result.push_back(mkuptr<ExternalFunction>("input", Vec<int> { 0 }));
+		result.push_back(mkuptr<ExternalFunction>("print", Vec<int> { 1 }));
+		result.push_back(mkuptr<ExternalFunction>("allocate", Vec<int> { 2 }));
+		result.push_back(mkuptr<ExternalFunction>("tuple-error", Vec<int> { 3 }));
+		result.push_back(mkuptr<ExternalFunction>("tensor-error", Vec<int> { 1, 3, 4 }));
+		return result;
 	}
 }

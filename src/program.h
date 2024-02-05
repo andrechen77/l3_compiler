@@ -663,6 +663,10 @@ namespace L3::program {
 
 		public:
 
+		ExternalFunction(std::string name, Vec<int> valid_num_arguments) :
+			name { mv(name) }, valid_num_arguments { mv(valid_num_arguments) }
+		{}
+
 		virtual const std::string &get_name() const override { return this->name; }
 		virtual bool verify_argument_num(int num) const override;
 		// virtual bool get_never_returns() const override;
@@ -702,4 +706,6 @@ namespace L3::program {
 			void add_l3_function(Uptr<L3Function> &&function, AggregateScope &fun_scope);
 		};
 	};
+
+	Vec<Uptr<ExternalFunction>> generate_std_functions();
 }
