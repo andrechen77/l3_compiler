@@ -133,8 +133,15 @@ namespace L3::program {
 		this->source->bind_to_scope(agg_scope);
 	}
 	bool InstructionAssignment::get_moves_control_flow() const {
-		// TODO
-		return false;
+		// only the source value can have a call
+		// this works for now but will fail if we have more complex
+		// subexpressions such as calls inside other expressions.
+		// thankfully I don't think we will run into that problem
+		if (FunctionCall *call = dynamic_cast<FunctionCall *>(this->source.get()); call) {
+			return true;
+		} else {
+			return false;
+		}
 	}
 	std::string InstructionAssignment::to_string() const {
 		std::string result;
@@ -188,9 +195,11 @@ namespace L3::program {
 		}
 		result += ") {\n";
 		for (const Uptr<BasicBlock> &block : this->blocks) {
+			result += "\t-----\n";
 			for (const Uptr<Instruction> &inst : block->instructions) {
 				result += "\t" + inst->to_string() + "\n";
 			}
+			// result += "\t>\n";
 		}
 		result += "}";
 		return result;

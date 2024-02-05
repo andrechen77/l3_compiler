@@ -10,6 +10,7 @@ define @main() {
 	br 0 :label
 	call @fun_with_argss(%a)
 	call print()
+	%m <- %n
 	%dest <- call @fun_with_more_args(%a, %b, %c)
 	return
 }
