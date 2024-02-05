@@ -291,6 +291,8 @@ namespace L3::program {
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
 
+	std::string to_string(const ComputationTree &tree);
+
 	// represents a computation from a series of instructions, starting with
 	// the leaves as input and ultimately outputting the root.
 	// Instantiating just this class instead of one of its subclasses represents
@@ -299,6 +301,7 @@ namespace L3::program {
 		Opt<Variable *> destination; // none if this computation is only for its side effects
 
 		ComputationNode(Opt<Variable *> destination) : destination { destination } {}
+		virtual std::string to_string() const;
 	};
 
 	struct MoveComputation : ComputationNode {
@@ -307,6 +310,7 @@ namespace L3::program {
 		MoveComputation(Opt<Variable *> destination, ComputationTree source) :
 			ComputationNode(destination), source { mv(source) }
 		{}
+		virtual std::string to_string() const override;
 	};
 
 	struct BinaryComputation : ComputationNode {
@@ -317,6 +321,7 @@ namespace L3::program {
 		BinaryComputation(Opt<Variable *> destination, Operator op, ComputationTree lhs, ComputationTree rhs) :
 			ComputationNode(destination), op {op}, lhs { mv(lhs) }, rhs { mv(rhs) }
 		{}
+		virtual std::string to_string() const override;
 	};
 
 	struct CallComputation : ComputationNode {
@@ -326,6 +331,7 @@ namespace L3::program {
 		CallComputation(Opt<Variable *> destination, ComputationTree function, Vec<ComputationTree> arguments) :
 			ComputationNode(destination), function { mv(function) }, arguments { mv(arguments) }
 		{}
+		virtual std::string to_string() const override;
 	};
 
 	struct LoadComputation : ComputationNode {
@@ -334,6 +340,7 @@ namespace L3::program {
 		LoadComputation(Opt<Variable *> destination, ComputationTree address) :
 			ComputationNode(destination), address { mv(address) }
 		{}
+		virtual std::string to_string() const override;
 	};
 
 	struct StoreComputation : ComputationNode {
@@ -344,6 +351,7 @@ namespace L3::program {
 		StoreComputation(ComputationTree address, ComputationTree value) :
 			ComputationNode({}), address { mv(address) }, value { mv(value) }
 		{}
+		virtual std::string to_string() const override;
 	};
 
 	struct ReturnBranchComputation : ComputationNode {
@@ -356,6 +364,7 @@ namespace L3::program {
 		ReturnBranchComputation(ComputationTree value) :
 			ComputationNode({}), value { mv(value) }
 		{}
+		virtual std::string to_string() const override;
 	};
 
 	struct BasicBlock {
@@ -584,6 +593,8 @@ namespace L3::program {
 		std::string to_string() const;
 	};
 
+	std::string to_string(Variable *const &variable);
+
 	// interface
 	class Function {
 		public:
@@ -657,6 +668,8 @@ namespace L3::program {
 		// virtual bool get_never_returns() const override;
 		virtual std::string to_string() const override;
 	};
+
+	std::string to_string(Function *const &function);
 
 	class Program {
 		Vec<Uptr<L3Function>> l3_functions;

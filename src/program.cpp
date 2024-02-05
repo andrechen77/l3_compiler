@@ -287,6 +287,80 @@ namespace L3::program {
 		return result;
 	}
 
+	std::string to_string(const ComputationTree &tree) {
+		if (Variable *const *variable = std::get_if<Variable *>(&tree)) {
+			return program::to_string(*variable);
+		} else if (Function *const *function = std::get_if<Function *>(&tree)) {
+			return program::to_string(*function);
+		} else if (const int64_t *value = std::get_if<int64_t>(&tree)) {
+			return std::to_string(*value);
+		} else if (const Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&tree)) {
+			return (*node)->to_string();
+		} else {
+			std::cout << "Error: I don't know how to convert this type of tree into a string.\n";
+			exit(1);
+		}
+	}
+
+	std::string ComputationNode::to_string() const {
+		return "CT Node ("
+			+ utils::to_string<Variable *, program::to_string>(this->destination)
+			+ ") {}";
+	}
+	std::string MoveComputation::to_string() const {
+		return "CT Move ("
+			+ utils::to_string<Variable *, program::to_string>(this->destination)
+			+ ") { source: "
+			+ program::to_string(source)
+			+ " }";
+	}
+	std::string BinaryComputation::to_string() const {
+		return "CT Binary ("
+			+ utils::to_string<Variable *, program::to_string>(this->destination)
+			+ ") { op: "
+			+ program::to_string(this->op)
+			+ ", lhs: "
+			+ program::to_string(this->lhs)
+			+ ", rhs: "
+			+ program::to_string(this->rhs)
+			+ " }";
+	}
+	std::string CallComputation::to_string() const {
+		std::string result = "CT Call ("
+			+ utils::to_string<Variable *, program::to_string>(this->destination)
+			+ ") { function: "
+			+ program::to_string(this->function)
+			+ ", args: [";
+		for (const ComputationTree &tree : this->arguments) {
+			result += program::to_string(tree) + ", ";
+		}
+		result += "] }";
+		return result;
+	}
+	std::string LoadComputation::to_string() const {
+		return "CT Load ("
+			+ utils::to_string<Variable *, program::to_string>(this->destination)
+			+ ") { address: "
+			+ program::to_string(this->address)
+			+ " }";
+	}
+	std::string StoreComputation::to_string() const {
+		return "CT Store ("
+			+ utils::to_string<Variable *, program::to_string>(this->destination)
+			+ ") { address: "
+			+ program::to_string(this->address)
+			+ ", value: "
+			+ program::to_string(this->value)
+			+ " }";
+	}
+	std::string ReturnBranchComputation::to_string() const {
+		return "CT ReturnBranch ("
+			+ utils::to_string<Variable *, program::to_string>(this->destination)
+			+ ") { value: "
+			+ utils::to_string<ComputationTree, program::to_string>(this->value)
+			+ " }";
+	}
+
 	void AggregateScope::set_parent(AggregateScope &parent) {
 		this->variable_scope.set_parent(parent.variable_scope);
 		this->label_scope.set_parent(parent.label_scope);
@@ -295,7 +369,11 @@ namespace L3::program {
 	}
 
 	std::string Variable::to_string() const {
-		return this->name;
+		return "%" + this->name;
+	}
+
+	std::string to_string(Variable *const &variable) {
+		return variable->to_string();
 	}
 
 	bool L3Function::verify_argument_num(int num) const {
@@ -311,6 +389,7 @@ namespace L3::program {
 			result += "\t-----\n";
 			for (const Uptr<Instruction> &inst : block->instructions) {
 				result += "\t" + inst->to_string() + "\n";
+					// + " || " + program::to_string(inst->to_computation_tree()) + "\n";
 			}
 			// result += "\t>\n";
 		}
@@ -385,7 +464,11 @@ namespace L3::program {
 		return false;
 	}
 	std::string ExternalFunction::to_string() const {
-		return "[function std::" + this->name + "]";
+		return "[[function std::" + this->name + "]]";
+	}
+
+	std::string to_string(Function *const &function) {
+		return "[[function " + function->get_name() + "]]";
 	}
 
 	std::string Program::to_string() const {
