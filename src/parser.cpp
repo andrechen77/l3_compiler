@@ -513,7 +513,7 @@ namespace L3::parser {
 			assert(*n.rule == typeid(rules::InstructionPureAssignmentRule));
 			return mkuptr<InstructionAssignment>(
 				make_expr(n[1]),
-				make_expr(n[0])
+				make_variable_ref(n[0])
 			);
 		}
 
@@ -525,7 +525,7 @@ namespace L3::parser {
 					make_expr(n[3]),
 					make_operator_rule(n[2])
 				),
-				make_expr(n[0])
+				make_variable_ref(n[0])
 			);
 		}
 
@@ -537,7 +537,7 @@ namespace L3::parser {
 					make_expr(n[3]),
 					make_operator_rule(n[2])
 				),
-				make_expr(n[0])
+				make_variable_ref(n[0])
 			);
 		}
 
@@ -547,7 +547,7 @@ namespace L3::parser {
 				mkuptr<MemoryLocation>(
 					make_variable_ref(n[1])
 				),
-				make_expr(n[0])
+				make_variable_ref(n[0])
 			);
 		}
 
@@ -605,7 +605,7 @@ namespace L3::parser {
 			assert(*n.rule == typeid(rules::InstructionCallValRule));
 			return mkuptr<InstructionAssignment>(
 				make_function_call(n[1]),
-				make_expr(n[0])
+				make_variable_ref(n[0])
 			);
 		}
 

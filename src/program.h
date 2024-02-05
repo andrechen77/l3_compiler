@@ -205,13 +205,13 @@ namespace L3::program {
 
 	class InstructionAssignment : public Instruction {
 		// the destination is optional only for the pure call instruction
-		Opt<Uptr<Expr>> maybe_dest;
+		Opt<Uptr<ItemRef<Variable>>> maybe_dest;
 		Uptr<Expr> source;
 
 		public:
 
 		InstructionAssignment(Uptr<Expr> &&expr) : source { mv(expr) } {}
-		InstructionAssignment(Uptr<Expr> &&source, Uptr<Expr> &&destination) :
+		InstructionAssignment(Uptr<Expr> &&source, Uptr<ItemRef<Variable>> &&destination) :
 			maybe_dest { Opt(mv(destination)) }, source { mv(source) }
 		{}
 
