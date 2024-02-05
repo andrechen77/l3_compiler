@@ -167,6 +167,7 @@ namespace L3::program {
 
 	class InstructionReturn;
 	class InstructionAssignment;
+	class InstructionStore;
 	class InstructionLabel;
 	class InstructionBranch;
 
@@ -175,6 +176,7 @@ namespace L3::program {
 		public:
 		virtual void visit(InstructionReturn &inst) = 0;
 		virtual void visit(InstructionAssignment &inst) = 0;
+		virtual void visit(InstructionStore &inst) = 0;
 		virtual void visit(InstructionLabel &inst) = 0;
 		virtual void visit(InstructionBranch &inst) = 0;
 	};
@@ -211,6 +213,22 @@ namespace L3::program {
 		InstructionAssignment(Uptr<Expr> &&expr) : source { mv(expr) } {}
 		InstructionAssignment(Uptr<Expr> &&source, Uptr<Expr> &&destination) :
 			maybe_dest { Opt(mv(destination)) }, source { mv(source) }
+		{}
+
+		virtual void bind_to_scope(AggregateScope &agg_scope) override;
+		virtual bool get_moves_control_flow() const override;
+		virtual std::string to_string() const override;
+		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
+	};
+
+	class InstructionStore : public Instruction {
+		Uptr<ItemRef<Variable>> base;
+		Uptr<Expr> source;
+
+		public:
+
+		InstructionStore(Uptr<Expr> &&source, Uptr<ItemRef<Variable>> &&base) :
+			base { mv(base) }, source { mv(source) }
 		{}
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;

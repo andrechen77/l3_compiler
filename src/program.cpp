@@ -62,7 +62,7 @@ namespace L3::program {
 		this->base->bind_to_scope(agg_scope);
 	}
 	std::string MemoryLocation::to_string() const {
-		return "mem " + this->base->to_string();
+		return "load " + this->base->to_string();
 	}
 
 	Operator str_to_op(std::string_view str) {
@@ -133,7 +133,7 @@ namespace L3::program {
 		this->source->bind_to_scope(agg_scope);
 	}
 	bool InstructionAssignment::get_moves_control_flow() const {
-		// only the source value can have a call
+		// FUTURE only the source value can have a call
 		// this works for now but will fail if we have more complex
 		// subexpressions such as calls inside other expressions.
 		// thankfully I don't think we will run into that problem
@@ -150,6 +150,21 @@ namespace L3::program {
 		}
 		result += this->source->to_string();
 		return result;
+	}
+
+	void InstructionStore::bind_to_scope(AggregateScope &agg_scope) {
+		this->base->bind_to_scope(agg_scope);
+		this->source->bind_to_scope(agg_scope);
+	}
+	bool InstructionStore::get_moves_control_flow() const {
+		// FUTURE the grammar prohibits a store instruction from having any kind
+		// of source expression other than a variable, so we know for sure that
+		// there cannot be a call or anything. For now, simply returning false
+		// will work
+		return false;
+	}
+	std::string InstructionStore::to_string() const {
+		return "store " + this->base->to_string() + " <- " + this->source->to_string();
 	}
 
 	void InstructionLabel::bind_to_scope(AggregateScope &agg_scope) {

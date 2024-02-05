@@ -553,11 +553,9 @@ namespace L3::parser {
 
 		Uptr<Instruction> convert_instruction_store_assignment_rule(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::InstructionStoreAssignmentRule));
-			return mkuptr<InstructionAssignment>(
+			return mkuptr<InstructionStore>(
 				make_expr(n[1]),
-				mkuptr<MemoryLocation>(
-					make_variable_ref(n[0])
-				)
+				make_variable_ref(n[0])
 			);
 		}
 
