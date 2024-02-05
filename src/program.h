@@ -650,7 +650,6 @@ namespace L3::program {
 			void add_name(std::string name);
 			void add_next_instruction(Uptr<Instruction> &&inst);
 			void add_parameter(std::string var_name);
-			// TODO add parameter vars
 
 			private:
 			void store_current_block();
