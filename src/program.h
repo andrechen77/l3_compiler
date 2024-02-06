@@ -677,6 +677,7 @@ namespace L3::program {
 		public:
 
 		virtual const std::string &get_name() const override { return this->name; }
+		Vec<Uptr<BasicBlock>> &get_blocks() { return this->blocks; }
 		virtual bool verify_argument_num(int num) const override;
 		// virtual bool get_never_returns() const override;
 		virtual std::string to_string() const override;
@@ -734,6 +735,7 @@ namespace L3::program {
 		public:
 
 		std::string to_string() const;
+		Vec<Uptr<L3Function>> &get_l3_functions() { return this->l3_functions; }
 
 		class Builder {
 			Vec<Uptr<L3Function>> l3_functions;
