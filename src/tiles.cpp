@@ -91,7 +91,6 @@ namespace L3::program::tiles {
 		}
 	};
 
-
 	// Matches: a MoveComputation variant of ComputationTree
 	// Captures: nothing
 	template<typename CtrOutput, typename SourceCtr>
@@ -109,6 +108,20 @@ namespace L3::program::tiles {
 				}
 			}
 			return false;
+		}
+	};
+
+	// Matches: a BinaryComputation variant of ComputationTree
+	// Captures: nothing
+	template<typename CtrOutput, Operator op, typename LhsCtr, typename RhsCtr>
+	struct BinaryCtr {
+		static bool match(ComputationTree &target, CtrOutput &o) {
+			Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target);
+			if (!node) return false;
+			BinaryComputation *bin_node = dynamic_cast<BinaryComputation *>(node->get());
+			if (!bin_node) return false;
+			if (bin_node->op != op) return false;
+			return LhsCtr::match(bin_node->lhs, o) && RhsCtr::match(bin_node->rhs, o);
 		}
 	};
 
@@ -147,7 +160,7 @@ namespace L3::program::tiles {
 	void tiletest(Program &program) {
 		// get a basic block to play with
 
-		BasicBlock &block = *program.get_l3_functions()[0]->get_blocks()[1];
+		BasicBlock &block = *program.get_l3_functions()[0]->get_blocks()[7];
 
 		Vec<Uptr<ComputationTree>> computation_trees;
 		for (const Uptr<Instruction> &inst : block.get_raw_instructions()) {
@@ -155,16 +168,14 @@ namespace L3::program::tiles {
 		}
 		for (const Uptr<ComputationTree> &tree : computation_trees) {
 			std::cout << program::to_string(*tree) << std::endl;
-			using O = std::tuple<Opt<Opt<Variable *>>, Opt<Vec<ComputationTree *>>>;
-			using Pattern = DestCtr<O, 0, CallCtr<O, AnyCtr<O, -1>, 1>>;
+			using O = std::tuple<Opt<Opt<Variable *>>, Opt<ComputationTree *>, Opt<ComputationTree *>>;
+			using Pattern = DestCtr<O, 0, BinaryCtr<O, Operator::plus, AnyCtr<O, 1>, AnyCtr<O, 2>>>;
 			if (Opt<O> maybe_match = attempt_match<O, Pattern>(*tree)) {
 				O &match = *maybe_match;
 				std::cout << "tile match success!\n";
 				std::cout << "0: " << program::to_string(**std::get<0>(match)) << "\n";
-				for (ComputationTree *tree : *std::get<1>(match)) {
-					std::cout << "1: " << program::to_string(*tree) << "\n";
-				}
-
+				std::cout << "1: " << program::to_string(**std::get<1>(match)) << "\n";
+				std::cout << "2: " << program::to_string(**std::get<2>(match)) << "\n";
 			}
 		}
 
