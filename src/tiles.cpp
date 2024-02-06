@@ -159,6 +159,19 @@ namespace L3::program::tiles {
 		}
 	};
 
+	// Matches: a StoreComputation variant of ComputationTree
+	// Captures: nothing
+	template<typename CtrOutput, typename AddressCtr, typename SourceCtr>
+	struct StoreCtr {
+		static bool match(ComputationTree &target, CtrOutput &o) {
+			Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target);
+			if (!node) return false;
+			StoreComputation *store_node = dynamic_cast<StoreComputation *>(node->get());
+			if (!store_node) return false;
+			return AddressCtr::match(store_node->address, o) && SourceCtr::match(store_node->value, o);
+		}
+	};
+
 	template<typename CtrOutput, typename Ctr>
 	Opt<CtrOutput> attempt_match(ComputationTree &tree) {
 		// TODO microoptimization for RVO?
@@ -181,14 +194,18 @@ namespace L3::program::tiles {
 		}
 		for (const Uptr<ComputationTree> &tree : computation_trees) {
 			std::cout << program::to_string(*tree) << std::endl;
-			using O = std::tuple<Opt<Opt<Variable *>>, Opt<ComputationTree *>>;
-			using Pattern = DestCtr<O, 0, LoadCtr<O, AnyCtr<O, 1>>>;
+			using O = std::tuple<
+				Opt<Opt<Variable *>>,
+				Opt<ComputationTree *>,
+				Opt<ComputationTree *>
+			>;
+			using Pattern = DestCtr<O, 0, StoreCtr<O, AnyCtr<O, 1>, AnyCtr<O, 2>>>;
 			if (Opt<O> maybe_match = attempt_match<O, Pattern>(*tree)) {
 				O &match = *maybe_match;
 				std::cout << "tile match success!\n";
-				std::cout << "0: " << program::to_string(**std::get<0>(match)) << "\n";
+				// std::cout << "0: " << program::to_string(**std::get<0>(match)) << "\n";
 				std::cout << "1: " << program::to_string(**std::get<1>(match)) << "\n";
-				// std::cout << "2: " << program::to_string(**std::get<2>(match)) << "\n";
+				std::cout << "2: " << program::to_string(**std::get<2>(match)) << "\n";
 			}
 		}
 
