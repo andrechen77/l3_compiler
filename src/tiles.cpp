@@ -9,12 +9,34 @@ namespace L3::program::tiles {
 
 	using CtrOutput = Vec<ComputationTree *>;
 
+	// Attempts to bind the capture at the specified index to the specified
+	// value. Always succeeeds if the existing value is null (i.e. that capture
+	// variable hasn't been bound yet). If the existing value is non-null,
+	// its referent must compare equal to the new value (this is to enforce
+	// constraints such as "match this structure but also make sure these two
+	// leaves point to the same Variable"). If the index is out of bound, fails.
+	// Returns success.
+	// TODO make index a template parameter instead of dynamic parameter?
+	bool bind_capture(CtrOutput &o, int index, ComputationTree *value) {
+		if (index >= o.size()) {
+			return false;
+		}
+		if (o[index]) {
+			// check if the existing value is equal
+			return *o[index] == *value;
+		} else {
+			// add the new value
+			o[index] = value;
+			return true;
+		}
+	}
+
 	template<int index>
 	struct VariableCtr {
 		static bool match(ComputationTree &target, CtrOutput &o) {
 			if (std::holds_alternative<Variable *>(target)) {
-				std::cout << "matched variable!\n";
-				o[index] = &target;
+				// std::cerr << "matched variable!\n";
+				if (!bind_capture(o, index, &target)) return false;
 				return true;
 			}
 			return false;
@@ -28,7 +50,7 @@ namespace L3::program::tiles {
 				if (MoveComputation *move_node = dynamic_cast<MoveComputation *>(node->get())) {
 					std::cout << "matched move tree, checking child\n";
 					if (SourceCtr::match(move_node->source, o)) {
-						o[index] = &target;
+						if (!bind_capture(o, index, &target)) return false;
 						return true;
 					} else {
 						return false;
@@ -67,8 +89,6 @@ namespace L3::program::tiles {
 				std::cout << "0: " << program::to_string(*match[0]) << "\n";
 				std::cout << "1: " << program::to_string(*match[1]) << "\n";
 			}
-			// Output o;
-			// MoveCtr<Output, 0, VariableCtr<Output, 1>>::match(*tree, o);
 		}
 
 		std::cout << "yay" << std::endl;
