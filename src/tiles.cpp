@@ -34,7 +34,7 @@ namespace L3::program::tiles {
 	// do the capture and returns success. If the index is out of bound, fails.
 	// Returns success.
 	template<int index, typename CtrOutput, typename Value>
-	bool bind_capture(CtrOutput &o, Value value) {
+	bool bind_capture(CtrOutput &o, Value &&value) {
 		if constexpr (index < 0) {
 			return true;
 		} else {
@@ -43,7 +43,7 @@ namespace L3::program::tiles {
 				return *std::get<index>(o) == value;
 			} else {
 				// add the new value
-				std::get<index>(o) = value;
+				std::get<index>(o) = mv(value);
 				return true;
 			}
 		}
@@ -112,6 +112,27 @@ namespace L3::program::tiles {
 		}
 	};
 
+	// Matches: a CallComputation variant of ComputationTree
+	// Captures: a vector with pointers to all the argument ComputationTrees
+	template<typename CtrOutput, typename CalleeCtr, int index>
+	struct CallCtr {
+		static bool match(ComputationTree &target, CtrOutput &o) {
+			if (Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target)) {
+				if (CallComputation *call_node = dynamic_cast<CallComputation *>(node->get())) {
+					if (!CalleeCtr::match(call_node->function, o)) return false;
+					// create the vector of arguments
+					Vec<ComputationTree *> arg_tree_ptrs;
+					for (ComputationTree &arg_tree : call_node->arguments) {
+						arg_tree_ptrs.push_back(&arg_tree);
+					}
+					if (!bind_capture<index>(o, mv(arg_tree_ptrs))) return false;
+					return true;
+				}
+			}
+			return false;
+		}
+	};
+
 	template<typename CtrOutput, typename Ctr>
 	Opt<CtrOutput> attempt_match(ComputationTree &tree) {
 		// TODO microoptimization for RVO?
@@ -126,7 +147,7 @@ namespace L3::program::tiles {
 	void tiletest(Program &program) {
 		// get a basic block to play with
 
-		BasicBlock &block = *program.get_l3_functions()[0]->get_blocks()[7];
+		BasicBlock &block = *program.get_l3_functions()[0]->get_blocks()[1];
 
 		Vec<Uptr<ComputationTree>> computation_trees;
 		for (const Uptr<Instruction> &inst : block.get_raw_instructions()) {
@@ -134,13 +155,16 @@ namespace L3::program::tiles {
 		}
 		for (const Uptr<ComputationTree> &tree : computation_trees) {
 			std::cout << program::to_string(*tree) << std::endl;
-			using O = std::tuple<Opt<Opt<Variable *>>, Opt<ComputationTree *>>;
-			using Pattern = DestCtr<O, 0, MoveCtr<O, AnyCtr<O, 1>>>;
+			using O = std::tuple<Opt<Opt<Variable *>>, Opt<Vec<ComputationTree *>>>;
+			using Pattern = DestCtr<O, 0, CallCtr<O, AnyCtr<O, -1>, 1>>;
 			if (Opt<O> maybe_match = attempt_match<O, Pattern>(*tree)) {
 				O &match = *maybe_match;
 				std::cout << "tile match success!\n";
 				std::cout << "0: " << program::to_string(**std::get<0>(match)) << "\n";
-				std::cout << "1: " << program::to_string(**std::get<1>(match)) << "\n";
+				for (ComputationTree *tree : *std::get<1>(match)) {
+					std::cout << "1: " << program::to_string(*tree) << "\n";
+				}
+
 			}
 		}
 
