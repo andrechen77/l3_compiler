@@ -202,7 +202,7 @@ namespace L3::program {
 	class Instruction {
 		public:
 		virtual void bind_to_scope(AggregateScope &agg_scope) = 0;
-		virtual ComputationTree to_computation_tree() const = 0;
+		virtual Uptr<ComputationNode> to_computation_tree() const = 0;
 		virtual std::string to_string() const = 0;
 		virtual void accept(InstructionVisitor &v) = 0;
 
@@ -224,7 +224,7 @@ namespace L3::program {
 		InstructionReturn(Opt<Uptr<Expr>> &&return_value) : return_value { mv(return_value) } {}
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
-		virtual ComputationTree to_computation_tree() const override;
+		virtual Uptr<ComputationNode> to_computation_tree() const override;
 		virtual Instruction::ControlFlowResult get_control_flow() const { return { false, false, Opt<ItemRef<BasicBlock> *>() }; };
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -243,7 +243,7 @@ namespace L3::program {
 		{}
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
-		virtual ComputationTree to_computation_tree() const override;
+		virtual Uptr<ComputationNode> to_computation_tree() const override;
 		virtual Instruction::ControlFlowResult get_control_flow() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -260,7 +260,7 @@ namespace L3::program {
 		{}
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
-		virtual ComputationTree to_computation_tree() const override;
+		virtual Uptr<ComputationNode> to_computation_tree() const override;
 		virtual Instruction::ControlFlowResult get_control_flow() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -275,7 +275,7 @@ namespace L3::program {
 
 		const std::string &get_name() const { return this->label_name; }
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
-		virtual ComputationTree to_computation_tree() const override;
+		virtual Uptr<ComputationNode> to_computation_tree() const override;
 		virtual Instruction::ControlFlowResult get_control_flow() const { return { true, false, Opt<ItemRef<BasicBlock> *>()}; };
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -296,7 +296,7 @@ namespace L3::program {
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
 		virtual Instruction::ControlFlowResult get_control_flow() const override;
-		virtual ComputationTree to_computation_tree() const override;
+		virtual Uptr<ComputationNode> to_computation_tree() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};

@@ -171,7 +171,7 @@ namespace L3::program {
 			(*this->return_value)->bind_to_scope(agg_scope);
 		}
 	}
-	ComputationTree InstructionReturn::to_computation_tree() const {
+	Uptr<ComputationNode> InstructionReturn::to_computation_tree() const {
 		if (this->return_value) {
 			return mkuptr<ReturnBranchComputation>(
 				(*this->return_value)->to_computation_tree()
@@ -194,7 +194,7 @@ namespace L3::program {
 		}
 		this->source->bind_to_scope(agg_scope);
 	}
-	ComputationTree InstructionAssignment::to_computation_tree() const {
+	Uptr<ComputationNode> InstructionAssignment::to_computation_tree() const {
 		ComputationTree tree = this->source->to_computation_tree();
 		// put a destination on the top node; or make a MoveComputation if
 		// the tree is actually a leaf
@@ -232,7 +232,7 @@ namespace L3::program {
 		this->base->bind_to_scope(agg_scope);
 		this->source->bind_to_scope(agg_scope);
 	}
-	ComputationTree InstructionStore::to_computation_tree() const {
+	Uptr<ComputationNode> InstructionStore::to_computation_tree() const {
 		return mkuptr<StoreComputation>(
 			this->base->to_computation_tree(),
 			this->source->to_computation_tree()
@@ -250,7 +250,7 @@ namespace L3::program {
 	}
 
 	void InstructionLabel::bind_to_scope(AggregateScope &agg_scope) {}
-	ComputationTree InstructionLabel::to_computation_tree() const {
+	Uptr<ComputationNode> InstructionLabel::to_computation_tree() const {
 		// InstructionLabels don't do anything, so output a no-op tree
 		return mkuptr<ComputationNode>(Opt<Variable *>());
 	}
@@ -271,7 +271,7 @@ namespace L3::program {
 			this->label.get()
 		};
 	}
-	ComputationTree InstructionBranch::to_computation_tree() const {
+	Uptr<ComputationNode> InstructionBranch::to_computation_tree() const {
 		if (this->condition) {
 			return mkuptr<ReturnBranchComputation>(
 				(*this->condition)->to_computation_tree()
