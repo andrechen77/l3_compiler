@@ -79,6 +79,25 @@ namespace L3::program::tiles {
 		}
 	};
 
+	// Matches: an empty Opt<ComputationTree>
+	// Captures: nothing
+	template<typename CtrOutput>
+	struct NoneOptCtr {
+		static bool match(Opt<ComputationTree> &target, CtrOutput &o) {
+			return !target.has_value();
+		}
+	};
+
+	// Matches: a non-empty Opt<ComputationTree>
+	// Captures: nothing
+	template<typename CtrOutput, typename InnerCtr>
+	struct SomeOptCtr {
+		static bool match(Opt<ComputationTree> &target, CtrOutput &o) {
+			if (!target.has_value()) return false;
+			return InnerCtr::match(*target, o);
+		}
+	};
+
 	// Matches: any ComputationTree
 	// Captures: a pointer to that ComputationTree
 	// This is used to stop the pattern from matching any deeper along this
@@ -127,7 +146,7 @@ namespace L3::program::tiles {
 
 	// Matches: a CallComputation variant of ComputationTree
 	// Captures: a vector with pointers to all the argument ComputationTrees
-	template<typename CtrOutput, typename CalleeCtr, int index>
+	template<typename CtrOutput, int index, typename CalleeCtr>
 	struct CallCtr {
 		static bool match(ComputationTree &target, CtrOutput &o) {
 			if (Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target)) {
@@ -172,6 +191,20 @@ namespace L3::program::tiles {
 		}
 	};
 
+	// Matches: a BranchComputation variant of ComputationTree
+	// Captures: the BasicBlock * representing jump destination
+	template<typename CtrOutput, int index, typename ConditionOptCtr>
+	struct BranchCtr {
+		static bool match(ComputationTree &target, CtrOutput &o) {
+			Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target);
+			if (!node) return false;
+			BranchComputation *branch_node = dynamic_cast<BranchComputation *>(node->get());
+			if (!branch_node) return false;
+			if (!bind_capture<index>(o, branch_node->jmp_dest)) return false;
+			return ConditionOptCtr::match(branch_node->condition, o);
+		}
+	};
+
 	template<typename CtrOutput, typename Ctr>
 	Opt<CtrOutput> attempt_match(ComputationTree &tree) {
 		// TODO microoptimization for RVO?
@@ -186,7 +219,7 @@ namespace L3::program::tiles {
 	void tiletest(Program &program) {
 		// get a basic block to play with
 
-		BasicBlock &block = *program.get_l3_functions()[0]->get_blocks()[7];
+		BasicBlock &block = *program.get_l3_functions()[0]->get_blocks()[4];
 
 		Vec<Uptr<ComputationTree>> computation_trees;
 		for (const Uptr<Instruction> &inst : block.get_raw_instructions()) {
@@ -195,17 +228,21 @@ namespace L3::program::tiles {
 		for (const Uptr<ComputationTree> &tree : computation_trees) {
 			std::cout << program::to_string(*tree) << std::endl;
 			using O = std::tuple<
-				Opt<Opt<Variable *>>,
-				Opt<ComputationTree *>,
+				Opt<BasicBlock *>,
 				Opt<ComputationTree *>
 			>;
-			using Pattern = DestCtr<O, 0, StoreCtr<O, AnyCtr<O, 1>, AnyCtr<O, 2>>>;
+			using Pattern = BranchCtr<O,
+				0,
+				SomeOptCtr<O,
+					AnyCtr<O, 1>
+				>
+			>;
 			if (Opt<O> maybe_match = attempt_match<O, Pattern>(*tree)) {
 				O &match = *maybe_match;
 				std::cout << "tile match success!\n";
-				// std::cout << "0: " << program::to_string(**std::get<0>(match)) << "\n";
+				std::cout << "0: " << program::to_string(*std::get<0>(match)) << "\n";
 				std::cout << "1: " << program::to_string(**std::get<1>(match)) << "\n";
-				std::cout << "2: " << program::to_string(**std::get<2>(match)) << "\n";
+				// std::cout << "2: " << program::to_string(**std::get<2>(match)) << "\n";
 			}
 		}
 
