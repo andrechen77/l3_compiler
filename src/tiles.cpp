@@ -11,16 +11,16 @@ namespace L3::program::tiles {
 
 	// Attempts to bind the capture at the specified index to the specified
 	// value. Always succeeeds if the existing value is null (i.e. that capture
-	// variable hasn't been bound yet). If the existing value is non-null,
-	// its referent must compare equal to the new value (this is to enforce
+	// variable hasn't been bound yet). If the existing value is non-null, its
+	// referent must compare equal to the new value (this is to enforce
 	// constraints such as "match this structure but also make sure these two
-	// leaves point to the same Variable"). If the index is out of bound, fails.
+	// leaves point to the same Variable"). If the index is negative, does not
+	// do the capture and returns success. If the index is out of bound, fails.
 	// Returns success.
 	// TODO make index a template parameter instead of dynamic parameter?
 	bool bind_capture(CtrOutput &o, int index, ComputationTree *value) {
-		if (index >= o.size()) {
-			return false;
-		}
+		if (index < 0) return true;
+		if (index >= o.size()) return false;
 		if (o[index]) {
 			// check if the existing value is equal
 			return *o[index] == *value;
@@ -31,7 +31,7 @@ namespace L3::program::tiles {
 		}
 	}
 
-	template<int index>
+	template<int index = -1>
 	struct VariableCtr {
 		static bool match(ComputationTree &target, CtrOutput &o) {
 			if (std::holds_alternative<Variable *>(target)) {
@@ -43,7 +43,7 @@ namespace L3::program::tiles {
 		}
 	};
 
-	template<typename SourceCtr, int index>
+	template<typename SourceCtr, int index = -1>
 	struct MoveCtr {
 		static bool match(ComputationTree &target, CtrOutput &o) {
 			if (Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target)) {
@@ -83,11 +83,11 @@ namespace L3::program::tiles {
 		}
 		for (const Uptr<ComputationTree> &tree : computation_trees) {
 			std::cout << program::to_string(*tree) << std::endl;
-			if (Opt<CtrOutput> maybe_match = attempt_match<2, MoveCtr<VariableCtr<1>, 0>>(*tree)) {
+			if (Opt<CtrOutput> maybe_match = attempt_match<1, MoveCtr<VariableCtr<0>>>(*tree)) {
 				CtrOutput &match = *maybe_match;
 				std::cout << "tile match success!\n";
 				std::cout << "0: " << program::to_string(*match[0]) << "\n";
-				std::cout << "1: " << program::to_string(*match[1]) << "\n";
+				// std::cout << "1: " << program::to_string(*match[1]) << "\n";
 			}
 		}
 
