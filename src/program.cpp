@@ -24,17 +24,17 @@ namespace L3::program {
 		}
 		return this->referent_nullable;
 	}
-	template<> std::string ItemRef<InstructionLabel>::to_string() const {
+	template<> std::string ItemRef<BasicBlock>::to_string() const {
 		std::string result = ":" + this->get_ref_name();
 		if (!this->referent_nullable) {
 			result += "?";
 		}
 		return result;
 	}
-	template<> void ItemRef<InstructionLabel>::bind_to_scope(AggregateScope &agg_scope) {
+	template<> void ItemRef<BasicBlock>::bind_to_scope(AggregateScope &agg_scope) {
 		agg_scope.label_scope.add_ref(*this);
 	}
-	template<> ComputationTree ItemRef<InstructionLabel>::to_computation_tree() const {
+	template<> ComputationTree ItemRef<BasicBlock>::to_computation_tree() const {
 		std::cerr << "Error: can't convert label name to computation tree.\n";
 		exit(1);
 	}
@@ -211,16 +211,13 @@ namespace L3::program {
 			);
 		}
 	}
-	bool InstructionAssignment::get_moves_control_flow() const {
+	Instruction::ControlFlowResult InstructionAssignment::get_control_flow() const {
 		// FUTURE only the source value can have a call
 		// this works for now but will fail if we have more complex
 		// subexpressions such as calls inside other expressions.
 		// thankfully I don't think we will run into that problem
-		if (FunctionCall *call = dynamic_cast<FunctionCall *>(this->source.get()); call) {
-			return true;
-		} else {
-			return false;
-		}
+		bool has_call = dynamic_cast<FunctionCall *>(this->source.get());
+		return { true, has_call, Opt<ItemRef<BasicBlock> *>() };
 	}
 	std::string InstructionAssignment::to_string() const {
 		std::string result;
@@ -241,20 +238,18 @@ namespace L3::program {
 			this->source->to_computation_tree()
 		);
 	}
-	bool InstructionStore::get_moves_control_flow() const {
+	Instruction::ControlFlowResult InstructionStore::get_control_flow() const {
 		// FUTURE the grammar prohibits a store instruction from having any kind
 		// of source expression other than a variable, so we know for sure that
 		// there cannot be a call or anything. For now, simply returning false
 		// will work
-		return false;
+		return { true, false, Opt<ItemRef<BasicBlock> *>() };
 	}
 	std::string InstructionStore::to_string() const {
 		return "store " + this->base->to_string() + " <- " + this->source->to_string();
 	}
 
-	void InstructionLabel::bind_to_scope(AggregateScope &agg_scope) {
-		agg_scope.label_scope.resolve_item(this->label_name, this);
-	}
+	void InstructionLabel::bind_to_scope(AggregateScope &agg_scope) {}
 	ComputationTree InstructionLabel::to_computation_tree() const {
 		// InstructionLabels don't do anything, so output a no-op tree
 		return mkuptr<ComputationNode>(Opt<Variable *>());
@@ -268,6 +263,13 @@ namespace L3::program {
 			(*this->condition)->bind_to_scope(agg_scope);
 		}
 		this->label->bind_to_scope(agg_scope);
+	}
+	Instruction::ControlFlowResult InstructionBranch::get_control_flow() const {
+		return {
+			this->condition.has_value(), // a conditional branch might fall through
+			false, // a branch instruction gets no promise of return
+			this->label.get()
+		};
 	}
 	ComputationTree InstructionBranch::to_computation_tree() const {
 		if (this->condition) {
@@ -361,6 +363,60 @@ namespace L3::program {
 			+ " }";
 	}
 
+	BasicBlock::BasicBlock() {} // default-initialize everything
+	BasicBlock::Builder::Builder() :
+		fetus { Uptr<BasicBlock>(new BasicBlock()) },
+		succ_block_refs {},
+		must_end { false },
+		falls_through { true }
+	{}
+	Uptr<BasicBlock> BasicBlock::Builder::get_result(BasicBlock *successor_nullable) {
+		if (this->succ_block_refs.has_value()) {
+			Opt<BasicBlock *> another_successor = (*this->succ_block_refs)->get_referent();
+			if (another_successor) {
+				this->fetus->succ_blocks.push_back(*another_successor);
+			} else {
+				std::cerr << "Error: control flow goes to unknown label: " << (*this->succ_block_refs)->to_string() << "\n";
+				exit(1);
+			}
+		}
+		if (this->falls_through && successor_nullable) {
+			this->fetus->succ_blocks.push_back(successor_nullable);
+		} // TODO shouldn't it be an error to fall through without a successor? bc we must end with a return?
+
+		return mv(this->fetus);
+	}
+	Pair<BasicBlock *, Opt<std::string>> BasicBlock::Builder::get_fetus_and_name() {
+		return {
+			this->fetus.get(),
+			this->fetus->get_name().size() > 0 ? this->fetus->get_name() : Opt<std::string>()
+		};
+	}
+	bool BasicBlock::Builder::add_next_instruction(Uptr<Instruction> &&inst) {
+		if (this->must_end) {
+			return false;
+		}
+
+		if (InstructionLabel *inst_label = dynamic_cast<InstructionLabel *>(inst.get())) {
+			if (this->fetus->raw_instructions.empty()) {
+				this->fetus->name = inst_label->get_name();
+			} else {
+				return false;
+			}
+		}
+		auto [falls_through, yields_control, jmp_dest] = inst->get_control_flow();
+		this->falls_through = falls_through;
+		if (!falls_through || yields_control) {
+			this->must_end = true;
+		}
+		if (jmp_dest) {
+			this->must_end = true;
+			this->succ_block_refs = *jmp_dest;
+		}
+		this->fetus->raw_instructions.push_back(mv(inst));
+		return true;
+	}
+
 	void AggregateScope::set_parent(AggregateScope &parent) {
 		this->variable_scope.set_parent(parent.variable_scope);
 		this->label_scope.set_parent(parent.label_scope);
@@ -387,7 +443,7 @@ namespace L3::program {
 		result += ") {\n";
 		for (const Uptr<BasicBlock> &block : this->blocks) {
 			result += "\t-----\n";
-			for (const Uptr<Instruction> &inst : block->instructions) {
+			for (const Uptr<Instruction> &inst : block->get_raw_instructions()) {
 				result += "\t" + inst->to_string() + "\n";
 					// + " || " + program::to_string(inst->to_computation_tree()) + "\n";
 			}
@@ -396,15 +452,29 @@ namespace L3::program {
 		result += "}";
 		return result;
 	}
-	L3Function::Builder::Builder() :
-		// default-construct everything else
-		current_block { mkuptr<BasicBlock>() },
-		last_block_falls_through { false }
-	{}
+	L3Function::Builder::Builder()
+		// default-construct everything
+	{
+		this->block_builders.emplace_back(); // start with at least one block
+	}
 	Pair<Uptr<L3Function>, AggregateScope> L3Function::Builder::get_result() {
-		// store the current block
-		if (!this->current_block->instructions.empty()) {
-			this->store_current_block();
+		// bind all the blocks to the scope
+		for (BasicBlock::Builder &builder : this->block_builders) {
+			auto [block_ptr, maybe_name] = builder.get_fetus_and_name();
+			if (maybe_name) {
+				this->agg_scope.label_scope.resolve_item(mv(*maybe_name), block_ptr);
+			}
+		}
+
+		// at this point, all the BasicBlock::Builders should be completed
+		// get everything out of the block builders
+		Vec<Uptr<BasicBlock>> blocks;
+		BasicBlock *next_block_nullable = nullptr;
+		for (auto it = this->block_builders.rbegin(); it != this->block_builders.rend(); ++it) {
+			Uptr<BasicBlock> current_block = it->get_result(next_block_nullable);
+			BasicBlock *temp = current_block.get();
+			blocks.push_back(mv(current_block));
+			next_block_nullable = temp;
 		}
 
 		// bind all unbound variables to new variable items
@@ -418,7 +488,7 @@ namespace L3::program {
 		return std::make_pair(
 			Uptr<L3Function>(new L3Function( // using constructor instead of make_unique because L3Function's private constructor
 				mv(this->name),
-				mv(this->blocks),
+				mv(blocks),
 				mv(this->vars),
 				mv(this->parameter_vars)
 			)),
@@ -429,30 +499,22 @@ namespace L3::program {
 		this->name = mv(name);
 	}
 	void L3Function::Builder::add_next_instruction(Uptr<Instruction> &&inst) {
-		/* if (this->last_block_falls_through) {
-			this->last_block_falls_through = false;
-			this->blocks.back()->succ_blocks.push_back((*this->current_block).get());
-		} */
 		inst->bind_to_scope(this->agg_scope);
-		if (InstructionLabel *inst_label = dynamic_cast<InstructionLabel *>(inst.get()); inst_label) {
-			this->store_current_block();
+		bool success = this->block_builders.back().add_next_instruction(mv(inst));
+		if (!success) {
+			// The contract of BasicBlock::Builder stipulates that a failure
+			// to add an instruction won't move out of the passed-in pointer,
+			// so `inst` is still valid :D
+			this->block_builders.emplace_back();
+			success = this->block_builders.back().add_next_instruction(mv(inst));
+			assert(success);
 		}
-		bool moves_control_flow = inst->get_moves_control_flow();
-		this->current_block->instructions.push_back(mv(inst));
-		if (moves_control_flow) {
-			this->store_current_block();
-		}
-		// TODO handle chaining basic blocks together
 	}
 	void L3Function::Builder::add_parameter(std::string var_name) {
 		Uptr<Variable> var_ptr = mkuptr<Variable>(var_name);
 		this->agg_scope.variable_scope.resolve_item(mv(var_name), var_ptr.get());
 		this->parameter_vars.push_back(var_ptr.get());
 		this->vars.emplace_back(mv(var_ptr));
-	}
-	void L3Function::Builder::store_current_block() {
-		this->blocks.push_back(mv(this->current_block));
-		this->current_block = mkuptr<BasicBlock>();
 	}
 
 	bool ExternalFunction::verify_argument_num(int num) const {

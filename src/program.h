@@ -10,9 +10,11 @@
 namespace L3::program {
 	using namespace std_alias;
 
+	// TODO rename `Builder` classes to `Mother` and `get_result` to `birth`
+
 	template<typename Item> class ItemRef;
 	class Variable;
-	class InstructionLabel;
+	class BasicBlock;
 	class Function;
 	class L3Function;
 	class ExternalFunction;
@@ -25,7 +27,7 @@ namespace L3::program {
 	class ExprVisitor {
 		public:
 		virtual void visit(ItemRef<Variable> &expr) = 0;
-		virtual void visit(ItemRef<InstructionLabel> &expr) = 0;
+		virtual void visit(ItemRef<BasicBlock> &expr) = 0;
 		virtual void visit(ItemRef<L3Function> &expr) = 0;
 		virtual void visit(ItemRef<ExternalFunction> &expr) = 0;
 		virtual void visit(NumberLiteral &expr) = 0;
@@ -200,10 +202,18 @@ namespace L3::program {
 	class Instruction {
 		public:
 		virtual void bind_to_scope(AggregateScope &agg_scope) = 0;
-		virtual bool get_moves_control_flow() const = 0;
 		virtual ComputationTree to_computation_tree() const = 0;
 		virtual std::string to_string() const = 0;
 		virtual void accept(InstructionVisitor &v) = 0;
+
+		// Returned by an instruction to describe the behavior of control flow
+		// following that instruction.
+		struct ControlFlowResult {
+			bool falls_through; // whether the instruction might move to the next instruction
+			bool yields_control; // whether the instruction yields control to another instruction on the promise that it will return (i.e. a function call)
+			Opt<ItemRef<BasicBlock> *> jmp_dest; // a label this location might jump to
+		};
+		virtual ControlFlowResult get_control_flow() const = 0;
 	};
 
 	class InstructionReturn : public Instruction {
@@ -215,7 +225,7 @@ namespace L3::program {
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
 		virtual ComputationTree to_computation_tree() const override;
-		virtual bool get_moves_control_flow() const { return true; };
+		virtual Instruction::ControlFlowResult get_control_flow() const { return { false, false, Opt<ItemRef<BasicBlock> *>() }; };
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
@@ -234,7 +244,7 @@ namespace L3::program {
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
 		virtual ComputationTree to_computation_tree() const override;
-		virtual bool get_moves_control_flow() const override;
+		virtual Instruction::ControlFlowResult get_control_flow() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
@@ -251,7 +261,7 @@ namespace L3::program {
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
 		virtual ComputationTree to_computation_tree() const override;
-		virtual bool get_moves_control_flow() const override;
+		virtual Instruction::ControlFlowResult get_control_flow() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
@@ -266,26 +276,26 @@ namespace L3::program {
 		const std::string &get_name() const { return this->label_name; }
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
 		virtual ComputationTree to_computation_tree() const override;
-		virtual bool get_moves_control_flow() const { return false; };
+		virtual Instruction::ControlFlowResult get_control_flow() const { return { true, false, Opt<ItemRef<BasicBlock> *>()}; };
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
 
 	class InstructionBranch : public Instruction {
 		Opt<Uptr<Expr>> condition;
-		Uptr<ItemRef<InstructionLabel>> label; // should this be a pointer to a BasicBlock instead?
+		Uptr<ItemRef<BasicBlock>> label;
 
 		public:
 
-		InstructionBranch(Uptr<ItemRef<InstructionLabel>> &&label, Uptr<Expr> &&condition) :
+		InstructionBranch(Uptr<ItemRef<BasicBlock>> &&label, Uptr<Expr> &&condition) :
 			condition { mv(condition) }, label { mv(label) }
 		{}
-		InstructionBranch(Uptr<ItemRef<InstructionLabel>> &&label) :
+		InstructionBranch(Uptr<ItemRef<BasicBlock>> &&label) :
 			condition {}, label { mv(label) }
 		{}
 
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
-		virtual bool get_moves_control_flow() const { return true; };
+		virtual Instruction::ControlFlowResult get_control_flow() const override;
 		virtual ComputationTree to_computation_tree() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
@@ -354,6 +364,7 @@ namespace L3::program {
 		virtual std::string to_string() const override;
 	};
 
+	// TODO separate these into different computation nodes for return and branch
 	struct ReturnBranchComputation : ComputationNode {
 		Opt<ComputationTree> value;
 
@@ -367,21 +378,62 @@ namespace L3::program {
 		virtual std::string to_string() const override;
 	};
 
-	struct BasicBlock {
-		Vec<Uptr<Instruction>> instructions;
+	class BasicBlock {
+		std::string name; // the empty string is treated as a lack of name; we can't just have an optional because ItemRef<BasicBlock> demans that the get_name method always returns a string
+		Vec<Uptr<Instruction>> raw_instructions;
 		// sequential instructions
 		// always ends with a call, branch, or return
 		// labels can only appear in the beginning
+		// there really isn't a purpose for this field since the trees exist
+		Vec<BasicBlock *> succ_blocks;
 
-		Vec<BasicBlock *> succ_blocks; // meaningless for now; ignore
+		explicit BasicBlock();
 
-		/* public:
+		/* explicit BasicBlock(
+			Opt<std::string> name,
+			Vec<Uptr<Instruction>> raw_instructions,
+			Vec<BasicBlock *> succ_blocks
+		) :
+			name { mv(name) },
+			raw_instructions { mv(raw_instructions) },
+			succ_blocks { mv(succ_blocks) }
+		{} */
 
-		BasicBlock();
+		public:
 
-		Vec<Uptr<Instruction>> &get_instructions() { return this->instructions; }
+		const std::string &get_name() const { return this->name; }
+		Vec<Uptr<Instruction>> &get_raw_instructions() { return this->raw_instructions; }
+		const Vec<BasicBlock *> &get_succ_blocks() const { return this->succ_blocks; }
 
-		const Vec<BasicBlock *> &get_succ_blocks() const { return this->succ_blocks; } */
+		class Builder {
+			Uptr<BasicBlock> fetus;
+			Opt<ItemRef<BasicBlock> *> succ_block_refs;
+			bool must_end;
+			// whether the BasicBlock being built can still be added to;
+			// false if there is an instruction that yields control flow
+			bool falls_through;
+
+			public:
+
+			Builder();
+
+			// Dies if there are unresolved label names at the time this
+			// function is called, since that means that the instructions of
+			// this block can't see its successors.
+			Uptr<BasicBlock> get_result(BasicBlock *successor_nullable);
+
+			// Returns a pointer to the undeveloped BasicBlock currently
+			// being built. This only exists because we need a memory location
+			// so that BasicBlocks can be linked to each other.
+			// THIS POINTER SHOULD NOT BE READ!
+			Pair<BasicBlock *, Opt<std::string>> get_fetus_and_name();
+
+			// Takes an Instruction that has all its free names either bound
+			// or pending binding to a scope.
+			// Returns whether the instruction was added. (Fails without moving
+			// if the basic block must end at the given instruction.)
+			bool add_next_instruction(Uptr<Instruction> &&inst);
+		};
 	};
 
 	// A Scope represents a namespace of Items that the ItemRefs care about.
@@ -575,7 +627,7 @@ namespace L3::program {
 
 	struct AggregateScope {
 		Scope<Variable> variable_scope;
-		Scope<InstructionLabel> label_scope;
+		Scope<BasicBlock> label_scope;
 		Scope<L3Function> l3_function_scope;
 		Scope<ExternalFunction> external_function_scope;
 
@@ -609,7 +661,6 @@ namespace L3::program {
 		Vec<Uptr<BasicBlock>> blocks;
 		Vec<Uptr<Variable>> vars;
 		Vec<Variable *> parameter_vars;
-		AggregateScope agg_scope;
 
 		explicit L3Function(
 			std::string name,
@@ -632,17 +683,11 @@ namespace L3::program {
 
 		class Builder {
 			std::string name;
-			Vec<Uptr<BasicBlock>> blocks;
+			Vec<BasicBlock::Builder> block_builders;
 			Vec<Uptr<Variable>> vars;
 			Vec<Variable *> parameter_vars;
 
 			AggregateScope agg_scope;
-			Scope<BasicBlock> block_scope;
-
-			Uptr<BasicBlock> current_block;
-			// whether it's possible for the last block in the blocks list to
-			// have execution fall through to the current block
-			bool last_block_falls_through;
 
 			public:
 			Builder();
@@ -650,9 +695,6 @@ namespace L3::program {
 			void add_name(std::string name);
 			void add_next_instruction(Uptr<Instruction> &&inst);
 			void add_parameter(std::string var_name);
-
-			private:
-			void store_current_block();
 		};
 	};
 

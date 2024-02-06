@@ -458,9 +458,9 @@ namespace L3::parser {
 			return mkuptr<ItemRef<ExternalFunction>>(std::string(n.string_view()));
 		}
 
-		Uptr<ItemRef<InstructionLabel>> make_label_ref(const ParseNode &n) {
+		Uptr<ItemRef<BasicBlock>> make_label_ref(const ParseNode &n) {
 			assert(*n.rule == typeid(rules::LabelRule));
-			return mkuptr<ItemRef<InstructionLabel>>(std::string(convert_name_rule(n[0])));
+			return mkuptr<ItemRef<BasicBlock>>(std::string(convert_name_rule(n[0])));
 		}
 
 		Uptr<NumberLiteral> make_number_literal(const ParseNode &n) {
