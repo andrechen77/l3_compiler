@@ -364,17 +364,23 @@ namespace L3::program {
 		virtual std::string to_string() const override;
 	};
 
-	// TODO separate these into different computation nodes for return and branch
-	struct ReturnBranchComputation : ComputationNode {
+	struct BranchComputation : ComputationNode {
+		BasicBlock *jmp_dest;
+		Opt<ComputationTree> condition;
+
+		// note that there is no destination argument
+		BranchComputation(BasicBlock *jmp_dest, Opt<ComputationTree> condition) :
+			ComputationNode({}), jmp_dest { jmp_dest }, condition { mv(condition) }
+		{}
+		virtual std::string to_string() const override;
+	};
+
+	struct ReturnComputation : ComputationNode {
 		Opt<ComputationTree> value;
 
 		// note that there is no destination argument
-		ReturnBranchComputation() :
-			ComputationNode({}), value {}
-		{}
-		ReturnBranchComputation(ComputationTree value) :
-			ComputationNode({}), value { mv(value) }
-		{}
+		ReturnComputation() : ComputationNode({}), value {} {}
+		ReturnComputation(ComputationTree value) : ComputationNode({}), value { mv(value) } {}
 		virtual std::string to_string() const override;
 	};
 
@@ -435,6 +441,8 @@ namespace L3::program {
 			bool add_next_instruction(Uptr<Instruction> &&inst);
 		};
 	};
+
+	std::string to_string(BasicBlock *const &block);
 
 	// A Scope represents a namespace of Items that the ItemRefs care about.
 	// A Scope does not own any of the Items it maps to.
