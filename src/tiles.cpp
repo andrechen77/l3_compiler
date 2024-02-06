@@ -57,7 +57,6 @@ namespace L3::program::tiles {
 	struct VariableCtr {
 		static bool match(ComputationTree &target, CtrOutput &o) {
 			if (Variable **ptr = std::get_if<Variable *>(&target)) {
-				std::cerr << "matched variable!\n";
 				if (!bind_capture<index>(o, *ptr)) return false;
 				return true;
 			}
@@ -70,12 +69,11 @@ namespace L3::program::tiles {
 	template<typename CtrOutput, int index, typename NodeCtr>
 	struct DestCtr {
 		static bool match(ComputationTree &target, CtrOutput &o) {
-			if (Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target)) {
-				if (!bind_capture<index>(o, (*node)->destination)) return false;
-				if (!NodeCtr::match(target, o)) return false;
-				return true;
-			}
-			return false;
+			Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target);
+			if (!node) return false;
+			if (!bind_capture<index>(o, (*node)->destination)) return false;
+			if (!NodeCtr::match(target, o)) return false;
+			return true;
 		}
 	};
 
@@ -115,18 +113,11 @@ namespace L3::program::tiles {
 	template<typename CtrOutput, typename SourceCtr>
 	struct MoveCtr {
 		static bool match(ComputationTree &target, CtrOutput &o) {
-			if (Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target)) {
-				if (MoveComputation *move_node = dynamic_cast<MoveComputation *>(node->get())) {
-					std::cerr << "matched move tree, checking child\n";
-					if (SourceCtr::match(move_node->source, o)) {
-						std::cerr << "child worked\n";
-						return true;
-					} else {
-						return false;
-					}
-				}
-			}
-			return false;
+			Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target);
+			if (!node) return false;
+			MoveComputation *move_node = dynamic_cast<MoveComputation *>(node->get());
+			if (!move_node) return false;
+			return SourceCtr::match(move_node->source, o);
 		}
 	};
 
@@ -149,19 +140,21 @@ namespace L3::program::tiles {
 	template<typename CtrOutput, int index, typename CalleeCtr>
 	struct CallCtr {
 		static bool match(ComputationTree &target, CtrOutput &o) {
-			if (Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target)) {
-				if (CallComputation *call_node = dynamic_cast<CallComputation *>(node->get())) {
-					if (!CalleeCtr::match(call_node->function, o)) return false;
-					// create the vector of arguments
-					Vec<ComputationTree *> arg_tree_ptrs;
-					for (ComputationTree &arg_tree : call_node->arguments) {
-						arg_tree_ptrs.push_back(&arg_tree);
-					}
-					if (!bind_capture<index>(o, mv(arg_tree_ptrs))) return false;
-					return true;
-				}
+			Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target);
+			if (!node) return false;
+			CallComputation *call_node = dynamic_cast<CallComputation *>(node->get());
+			if (!call_node) return false;
+
+			if (!CalleeCtr::match(call_node->function, o)) return false;
+
+			// create the vector of arguments
+			Vec<ComputationTree *> arg_tree_ptrs;
+			for (ComputationTree &arg_tree : call_node->arguments) {
+				arg_tree_ptrs.push_back(&arg_tree);
 			}
-			return false;
+			if (!bind_capture<index>(o, mv(arg_tree_ptrs))) return false;
+
+			return true;
 		}
 	};
 
