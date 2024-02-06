@@ -32,7 +32,7 @@ namespace L3::program::tiles {
 	// leaves point to the same Variable"). If the index is negative, does not
 	// do the capture and returns success. If the index is out of bound, fails.
 	// Returns success.
-	template<typename CtrOutput, int index, typename Value>
+	template<int index, typename CtrOutput, typename Value>
 	bool bind_capture(CtrOutput &o, Value value) {
 		if constexpr (index < 0) {
 			return true;
@@ -57,7 +57,7 @@ namespace L3::program::tiles {
 		static bool match(ComputationTree &target, CtrOutput &o) {
 			if (Variable **ptr = std::get_if<Variable *>(&target)) {
 				std::cerr << "matched variable!\n";
-				if (!bind_capture<CtrOutput, index, Variable *>(o, *ptr)) return false;
+				if (!bind_capture<index>(o, *ptr)) return false;
 				return true;
 			}
 			return false;
