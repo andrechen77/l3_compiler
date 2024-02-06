@@ -1,5 +1,6 @@
 #include "tiles.h"
 #include "std_alias.h"
+#include "utils.h"
 #include <iostream>
 
 namespace L3::program::tiles {
@@ -66,10 +67,17 @@ namespace L3::program::tiles {
 
 	// Matches: any ComputationNode variant of ComputationTree
 	// Captures: the Opt<Variable *> in the node's destination field
-	// template<typename Output, int index = -1>
-	// struct DestCtr {
-	// 	static bool match(ComputationTree &target, CtrOutput &o)
-	// }
+	template<typename CtrOutput, int index, typename NodeCtr>
+	struct DestCtr {
+		static bool match(ComputationTree &target, CtrOutput &o) {
+			if (Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target)) {
+				if (!bind_capture<index>(o, (*node)->destination)) return false;
+				if (!NodeCtr::match(target, o)) return false;
+				return true;
+			}
+			return false;
+		}
+	};
 
 	// Matches: a MoveComputation variant of ComputationTree
 	// Captures: nothing
@@ -81,7 +89,6 @@ namespace L3::program::tiles {
 					std::cerr << "matched move tree, checking child\n";
 					if (SourceCtr::match(move_node->source, o)) {
 						std::cerr << "child worked\n";
-						// if (!bind_capture<CtrOutput, index, Opt<Variable *>>(o, move_node->destination)) return false;
 						return true;
 					} else {
 						return false;
@@ -114,13 +121,13 @@ namespace L3::program::tiles {
 		}
 		for (const Uptr<ComputationTree> &tree : computation_trees) {
 			std::cout << program::to_string(*tree) << std::endl;
-			using O = std::tuple<Opt<Variable *>>;
-			using Pattern = MoveCtr<O, VariableCtr<O, 0>>;
+			using O = std::tuple<Opt<Opt<Variable *>>, Opt<Variable *>>;
+			using Pattern = DestCtr<O, 0, MoveCtr<O, VariableCtr<O, 1>>>;
 			if (Opt<O> maybe_match = attempt_match<O, Pattern>(*tree)) {
 				O &match = *maybe_match;
 				std::cout << "tile match success!\n";
-				std::cout << "0: " << program::to_string(*std::get<0>(match)) << "\n";
-				// std::cout << "1: " << program::to_string(*match[1]) << "\n";
+				std::cout << "0: " << program::to_string(**std::get<0>(match)) << "\n";
+				std::cout << "1: " << program::to_string(*std::get<1>(match)) << "\n";
 			}
 		}
 
