@@ -205,6 +205,19 @@ namespace L3::program::tiles {
 		}
 	};
 
+	// Matches: a ReturnComputation variant of ComputationTree
+	// Captures: nothing
+	template<typename CtrOutput, typename ValueOptCtr>
+	struct ReturnCtr {
+		static bool match(ComputationTree &target, CtrOutput &o) {
+			Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target);
+			if (!node) return false;
+			ReturnComputation *return_node = dynamic_cast<ReturnComputation *>(node->get());
+			if (!return_node) return false;
+			return ValueOptCtr::match(return_node->value, o);
+		}
+	};
+
 	template<typename CtrOutput, typename Ctr>
 	Opt<CtrOutput> attempt_match(ComputationTree &tree) {
 		// TODO microoptimization for RVO?
@@ -219,7 +232,7 @@ namespace L3::program::tiles {
 	void tiletest(Program &program) {
 		// get a basic block to play with
 
-		BasicBlock &block = *program.get_l3_functions()[0]->get_blocks()[4];
+		BasicBlock &block = *program.get_l3_functions()[0]->get_blocks()[0];
 
 		Vec<Uptr<ComputationTree>> computation_trees;
 		for (const Uptr<Instruction> &inst : block.get_raw_instructions()) {
@@ -228,20 +241,16 @@ namespace L3::program::tiles {
 		for (const Uptr<ComputationTree> &tree : computation_trees) {
 			std::cout << program::to_string(*tree) << std::endl;
 			using O = std::tuple<
-				Opt<BasicBlock *>,
 				Opt<ComputationTree *>
 			>;
-			using Pattern = BranchCtr<O,
-				0,
-				SomeOptCtr<O,
-					AnyCtr<O, 1>
-				>
+			using Pattern = ReturnCtr<O,
+				NoneOptCtr<O>
 			>;
 			if (Opt<O> maybe_match = attempt_match<O, Pattern>(*tree)) {
 				O &match = *maybe_match;
 				std::cout << "tile match success!\n";
-				std::cout << "0: " << program::to_string(*std::get<0>(match)) << "\n";
-				std::cout << "1: " << program::to_string(**std::get<1>(match)) << "\n";
+				// std::cout << "0: " << program::to_string(**std::get<0>(match)) << "\n";
+				// std::cout << "1: " << program::to_string(**std::get<1>(match)) << "\n";
 				// std::cout << "2: " << program::to_string(**std::get<2>(match)) << "\n";
 			}
 		}
