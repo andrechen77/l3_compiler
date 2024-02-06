@@ -6,9 +6,9 @@ define @main() {
 	store %k <- %l
 	:label
 	br :label
-	br %_ :labed
+	br %_ :label
 	br 0 :label
-	call @fun_with_argss(%a)
+	call @fun_with_args(%a)
 	call print()
 	%m <- %n
 	%dest <- call @fun_with_more_args(%a, %b, %c)

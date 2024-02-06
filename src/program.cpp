@@ -173,11 +173,11 @@ namespace L3::program {
 	}
 	Uptr<ComputationNode> InstructionReturn::to_computation_tree() const {
 		if (this->return_value) {
-			return mkuptr<ReturnBranchComputation>(
+			return mkuptr<ReturnComputation>(
 				(*this->return_value)->to_computation_tree()
 			);
 		} else {
-			return mkuptr<ReturnBranchComputation>();
+			return mkuptr<ReturnComputation>();
 		}
 	}
 	std::string InstructionReturn::to_string() const {
@@ -272,13 +272,14 @@ namespace L3::program {
 		};
 	}
 	Uptr<ComputationNode> InstructionBranch::to_computation_tree() const {
+		Opt<ComputationTree> condition_tree;
 		if (this->condition) {
-			return mkuptr<ReturnBranchComputation>(
-				(*this->condition)->to_computation_tree()
-			);
-		} else {
-			return mkuptr<ReturnBranchComputation>();
+			condition_tree = (*this->condition)->to_computation_tree();
 		}
+		return mkuptr<BranchComputation>(
+			this->label->get_referent().value(),
+			mv(condition_tree)
+		);
 	}
 	std::string InstructionBranch::to_string() const {
 		std::string result = "br ";
@@ -355,8 +356,17 @@ namespace L3::program {
 			+ program::to_string(this->value)
 			+ " }";
 	}
-	std::string ReturnBranchComputation::to_string() const {
-		return "CT ReturnBranch ("
+	std::string BranchComputation::to_string() const {
+		return "CT Branch ("
+			+ utils::to_string<Variable *, program::to_string>(this->destination)
+			+ ") { jmp_dest: "
+			+ program::to_string(this->jmp_dest)
+			+ ", condition: "
+			+ utils::to_string<ComputationTree, program::to_string>(this->condition)
+			+ " }";
+	}
+	std::string ReturnComputation::to_string() const {
+		return "CT Return ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { value: "
 			+ utils::to_string<ComputationTree, program::to_string>(this->value)
@@ -415,6 +425,9 @@ namespace L3::program {
 		}
 		this->fetus->raw_instructions.push_back(mv(inst));
 		return true;
+	}
+	std::string to_string(BasicBlock *const &block) {
+		return block->get_name();
 	}
 
 	void AggregateScope::set_parent(AggregateScope &parent) {
