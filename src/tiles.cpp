@@ -53,7 +53,7 @@ namespace L3::program::tiles {
 
 	// Matches: A Variable * variant of ComputationTree
 	// Captures: the Variable *
-	template<typename CtrOutput, int index = -1>
+	template<typename CtrOutput, int index>
 	struct VariableCtr {
 		static bool match(ComputationTree &target, CtrOutput &o) {
 			if (Variable **ptr = std::get_if<Variable *>(&target)) {
@@ -78,6 +78,19 @@ namespace L3::program::tiles {
 			return false;
 		}
 	};
+
+	// Matches: any ComputationTree
+	// Captures: a pointer to that ComputationTree
+	// This is used to stop the pattern from matching any deeper along this
+	// branch, leaving the rest of the tree to be matched by other tiles.
+	template<typename CtrOutput, int index>
+	struct AnyCtr {
+		static bool match(ComputationTree &target, CtrOutput &o) {
+			if (!bind_capture<index>(o, &target)) return false;
+			return true;
+		}
+	};
+
 
 	// Matches: a MoveComputation variant of ComputationTree
 	// Captures: nothing
@@ -121,13 +134,13 @@ namespace L3::program::tiles {
 		}
 		for (const Uptr<ComputationTree> &tree : computation_trees) {
 			std::cout << program::to_string(*tree) << std::endl;
-			using O = std::tuple<Opt<Opt<Variable *>>, Opt<Variable *>>;
-			using Pattern = DestCtr<O, 0, MoveCtr<O, VariableCtr<O, 1>>>;
+			using O = std::tuple<Opt<Opt<Variable *>>, Opt<ComputationTree *>>;
+			using Pattern = DestCtr<O, 0, MoveCtr<O, AnyCtr<O, 1>>>;
 			if (Opt<O> maybe_match = attempt_match<O, Pattern>(*tree)) {
 				O &match = *maybe_match;
 				std::cout << "tile match success!\n";
 				std::cout << "0: " << program::to_string(**std::get<0>(match)) << "\n";
-				std::cout << "1: " << program::to_string(*std::get<1>(match)) << "\n";
+				std::cout << "1: " << program::to_string(**std::get<1>(match)) << "\n";
 			}
 		}
 
