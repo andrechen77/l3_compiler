@@ -697,6 +697,32 @@ namespace L3::program::tiles {
 			}
 		};
 
+		struct StoreMemory : TilePattern {
+			using Captures = std::tuple<
+				Opt<Variable *>,
+				Opt<Variable *>
+			>;
+			using O = Captures;
+			using Rule = StoreCtr<O, VariableCtr<O, 0>, VariableCtr<O, 1>>;
+
+			static const int cost = 1;
+			static const int munch = 1;
+
+			Captures captures;
+
+			virtual std::string to_l2_instructions() const override {
+				const auto &[dest, source] = this->captures;
+				if (!dest || !source) {
+					std::cerr << "Error: attempting to translate incomplete tile.";
+					exit(1);
+				}
+				return "mem " + to_l2_expr(*dest) + " 0 <- " + to_l2_expr(*source) + "\n";
+			}
+			virtual Vec<ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		};
+
 		int num_returns = 0; // number of returns we've seen so far
 		// FUTURE ugh please do anything else
 
@@ -800,6 +826,7 @@ namespace L3::program::tiles {
 			tp::BinaryGreaterThanEqualAssignment,
 			tp::BinaryGreaterThanAssignment,
 			tp::LoadMemory,
+			tp::StoreMemory,
 			tp::CallVal
 		>(tree, best_match, 0, 0);
 		return best_match;
