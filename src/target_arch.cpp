@@ -52,4 +52,14 @@ namespace L3::code_gen::target_arch {
 			exit(1);
 		}
 	}
+
+	void mangle_label_names(Program &program) {
+		for (Uptr<L3Function> &l3_function : program.get_l3_functions()) {
+			for (Uptr<BasicBlock> &block : l3_function->get_blocks()) {
+				if (block->get_name().size() > 0) {
+					block->mangle_name("_" + l3_function->get_name() + block->get_name());
+				}
+			}
+		}
+	}
 }

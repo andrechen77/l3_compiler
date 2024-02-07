@@ -414,6 +414,7 @@ namespace L3::program {
 		public:
 
 		const std::string &get_name() const { return this->name; }
+		void mangle_name(std::string new_name) { this->name = mv(new_name); }
 		Vec<Uptr<Instruction>> &get_raw_instructions() { return this->raw_instructions; }
 		const Vec<Uptr<Instruction>> &get_raw_instructions() const { return this->raw_instructions; }
 		const Vec<BasicBlock *> &get_succ_blocks() const { return this->succ_blocks; }

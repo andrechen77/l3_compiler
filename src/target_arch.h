@@ -19,4 +19,9 @@ namespace L3::code_gen::target_arch {
 	std::string to_l2_expr(const Function *function);
 	std::string to_l2_expr(int64_t number);
 	std::string to_l2_expr(const ComputationTree &tree);
+
+	// Modifies a program so that its label names are all globally unique
+	// and always start with an underscore (so that non-underscore names can
+	// be used by the generator)
+	void mangle_label_names(Program &program);
 }

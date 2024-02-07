@@ -33,7 +33,7 @@ namespace L3::code_gen {
 		// print each block
 		for (const Uptr<BasicBlock> &block : l3_function.get_blocks()) {
 			if (block->get_name().size() > 0) {
-				o << "\t\t:_" << l3_function.get_name() << "_" << block->get_name() << "\n";
+				o << "\t\t:" << block->get_name() << "\n";
 			}
 			Vec<Uptr<ComputationTree>> computation_trees = calculate_computation_trees(*block);
 			tiles::tile_trees(computation_trees, o);
@@ -43,7 +43,9 @@ namespace L3::code_gen {
 		o << "\t)\n";
 	}
 
-	void generate_program_code(const Program &program, std::ostream &o) {
+	void generate_program_code(Program &program, std::ostream &o) {
+		target_arch::mangle_label_names(program);
+
 		o << "(@" << (*program.get_main_function_ref().get_referent())->get_name() << "\n";
 		for (const Uptr<L3Function> &function : program.get_l3_functions()) {
 			generate_l3_function_code(*function, o);
