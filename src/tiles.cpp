@@ -1,5 +1,6 @@
 #include "tiles.h"
 #include "std_alias.h"
+#include "target_arch.h"
 #include "utils.h"
 #include <iostream>
 
@@ -71,6 +72,19 @@ namespace L3::program::tiles {
 			}
 		};
 
+		// Matches: A Function * variant of ComputationTree
+		// Captures: the Function *
+		template<typename CtrOutput, int index>
+		struct FunctionCtr {
+			static bool match(ComputationTree &target, CtrOutput &o) {
+				if (Function **ptr = std::get_if<Function *>(&target)) {
+					if (!bind_capture<index>(o, *ptr)) return false;
+					return true;
+				}
+				return false;
+			}
+		};
+
 		// Matches: A Variable * or int64_t variant of ComputationTree
 		// Captures: a copy of the ComputationTree
 		template<typename CtrOutput, int index>
@@ -112,6 +126,19 @@ namespace L3::program::tiles {
 				if (!node) return false;
 				if (!(*node)->destination) return false;
 				if (!bind_capture<index>(o, *(*node)->destination)) return false;
+				if (!NodeCtr::match(target, o)) return false;
+				return true;
+			}
+		};
+
+		// Matches: a ComputationNode variant of ComputationTree
+		// Captures: the Opt<Variable *> in the node's destination field
+		template<typename CtrOutput, int index, typename NodeCtr>
+		struct MaybeDestCtr {
+			static bool match(ComputationTree &target, CtrOutput &o) {
+				Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target);
+				if (!node) return false;
+				if (!bind_capture<index>(o, (*node)->destination)) return false;
 				if (!NodeCtr::match(target, o)) return false;
 				return true;
 			}
@@ -260,6 +287,7 @@ namespace L3::program::tiles {
 
 	namespace tile_patterns {
 		using namespace rules;
+		using namespace L3::code_gen::target_arch; // TODO just fix the namespaces
 
 		// interface
 		struct TilePattern {
@@ -292,6 +320,65 @@ namespace L3::program::tiles {
 			}
 			virtual Vec<ComputationTree *> get_unmatched() const override {
 				return {};
+			}
+		};
+
+		int num_returns = 0; // number of returns we've seen so far
+		// FUTURE ugh please do anything else
+
+		struct CallVal : TilePattern {
+			using Captures = std::tuple<
+				Opt<Opt<Variable *>>,
+				Opt<Function *>,
+				Opt<Vec<ComputationTree *>>
+			>;
+			using O = Captures;
+			using Rule = MaybeDestCtr<O, 0,
+				CallCtr<O, 2,
+					FunctionCtr<O, 1>
+				>
+			>;
+			static const int cost = 1;
+
+			Captures captures;
+
+			virtual std::string to_l2_instructions() const override {
+				const auto &[maybe_dest, maybe_callee, maybe_args] = this->captures;
+				if (!maybe_dest || !maybe_callee || !maybe_args) {
+					std::cerr << "Error: attempting to translate incomplete tile.";
+					exit(1);
+				}
+				const Opt<Variable *> dest = *maybe_dest;
+				const Function *callee = *maybe_callee;
+				const Vec<ComputationTree *> &args = *maybe_args;
+
+				std::string result;
+				for (int i = 0; i < args.size(); ++i) {
+					result += get_argument_prepping_instruction(to_l2_expr(*args[i]), i) + "\n";
+				}
+				bool is_l3 = dynamic_cast<const L3Function *>(callee);
+				std::string return_label;
+				if (is_l3) {
+					return_label = ":ret" + std::to_string(num_returns);
+					num_returns += 1;
+					result += "mem rsp -8 <- " + return_label + "\n";
+				}
+				result += "call " + to_l2_expr(callee) + std::to_string(args.size()) + "\n";
+				if (is_l3) {
+					result += return_label + "\n";
+				}
+				if (dest) {
+					result += to_l2_expr(*dest) + " <- rax\n";
+				}
+				return result;
+			}
+			virtual Vec<ComputationTree *> get_unmatched() const override {
+				const auto &[dest, callee, args] = this->captures;
+				if (!args) {
+					std::cerr << "Error: incomplete tile.";
+					exit(1);
+				}
+				return *args;
 			}
 		};
 	};
@@ -328,11 +415,12 @@ namespace L3::program::tiles {
 
 			Vec<Uptr<tp::TilePattern>> matched_tiles;
 			attempt_tile_matches<
-				tp::Assignment
+				tp::Assignment,
+				tp::CallVal
 			>(*tree, matched_tiles);
 
 			for (const Uptr<tp::TilePattern> &tile : matched_tiles) {
-				o << "\t\t" << tile->to_l2_instructions() << "\n";
+				o << tile->to_l2_instructions() << "\n";
 			}
 		}
 	}

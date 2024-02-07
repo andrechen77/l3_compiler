@@ -33,7 +33,7 @@ namespace L3::code_gen {
 		// print each block
 		for (const Uptr<BasicBlock> &block : l3_function.get_blocks()) {
 			if (block->get_name().size() > 0) {
-				o << "\t\t:" << l3_function.get_name() << "_" << block->get_name() << "\n";
+				o << "\t\t:_" << l3_function.get_name() << "_" << block->get_name() << "\n";
 			}
 			Vec<Uptr<ComputationTree>> computation_trees = calculate_computation_trees(*block);
 			tiles::tile_trees(computation_trees, o);
