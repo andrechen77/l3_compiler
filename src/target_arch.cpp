@@ -27,13 +27,17 @@ namespace L3::code_gen::target_arch {
 	}
 
 	std::string to_l2_expr(const Variable *var){
-		return "%" + var->get_name();
+		return "%_" + var->get_name();
 	}
 	std::string to_l2_expr(const BasicBlock *block){
 		return ":" + block->get_name();
 	}
 	std::string to_l2_expr(const Function *function){
-		return "@" + function->get_name();
+		if (dynamic_cast<const L3Function *>(function)) {
+			return "@" + function->get_name();
+		} else {
+			return function->get_name();
+		}
 	}
 	std::string to_l2_expr(int64_t number){
 		return std::to_string(number);

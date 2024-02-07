@@ -217,6 +217,20 @@ namespace L3::program::tiles {
 			}
 		};
 
+		// Matches: a BinaryComputation variant of ComputationTree if it uses an arithmetic operator
+		// Captures: the Operator used
+		template<typename CtrOutput, int index, typename LhsCtr, typename RhsCtr>
+		struct BinaryArithCtr {
+			static bool match(ComputationTree &target, CtrOutput &o) {
+				Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target);
+				if (!node) return false;
+				BinaryComputation *bin_node = dynamic_cast<BinaryComputation *>(node->get());
+				if (!bin_node) return false;
+				if (!bind_capture<index>(o, bin_node->op)) return false;
+				return LhsCtr::match(bin_node->lhs, o) && RhsCtr::match(bin_node->rhs, o);
+			}
+		};
+
 		// Matches: a CallComputation variant of ComputationTree
 		// Captures: a vector with pointers to all the argument ComputationTrees
 		template<typename CtrOutput, int index, typename CalleeCtr>
@@ -357,7 +371,7 @@ namespace L3::program::tiles {
 			}
 		};
 
-		struct BinaryPlusAssignment : TilePattern {
+		/* struct BinaryPlusAssignment : TilePattern {
 			using Captures = std::tuple<
 				Opt<Variable *>,
 				Opt<ComputationTree>,
@@ -542,6 +556,41 @@ namespace L3::program::tiles {
 				}
 				std::string str = to_l2_expr(*dest) + " <- " + to_l2_expr(*lhs) + "\n";
 				str += to_l2_expr(*dest) + " <<= " + to_l2_expr(*rhs) + "\n";
+				return str;
+			}
+			virtual Vec<ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		}; */
+		struct BinaryArithmeticAssignment : TilePattern {
+			using Captures = std::tuple<
+				Opt<Variable *>,
+				Opt<Operator>,
+				Opt<ComputationTree>,
+				Opt<ComputationTree>
+			>;
+			using O = Captures;
+			using Rule = DestCtr<O, 0,
+				BinaryArithCtr<O, 1,
+					InexplicableTCtr<O, 2>,
+					InexplicableTCtr<O, 3>
+				>
+			>;
+			static const int cost = 1;
+			static const int munch = 1;
+
+			Captures captures;
+
+			virtual std::string to_l2_instructions() const override {
+				const auto &[dest, op, lhs, rhs] = this->captures;
+				if (!dest || !op || !lhs || !rhs) {
+					std::cerr << "Error: attempting to translate incomplete tile.";
+					exit(1);
+				}
+				std::string str;
+				str += "%_ <- " + to_l2_expr(*lhs) + "\n";
+				str += "%_ " + program::to_string(*op) + "= " + to_l2_expr(*rhs) + "\n";
+				str += to_l2_expr(*dest) + " <- %_";
 				return str;
 			}
 			virtual Vec<ComputationTree *> get_unmatched() const override {
@@ -946,12 +995,13 @@ namespace L3::program::tiles {
 		attempt_tile_matches<
 			tp::NoOp,
 			tp::PureAssignment,
-			tp::BinaryPlusAssignment,
-			tp::BinaryMinusAssignment,
-			tp::BinaryTimesAssignment,
-			tp::BinaryBitwiseAndAssignment,
-			tp::BinaryShiftLeftAssignment,
-			tp::BinaryShiftRightAssignment,
+			// tp::BinaryPlusAssignment,
+			// tp::BinaryMinusAssignment,
+			// tp::BinaryTimesAssignment,
+			// tp::BinaryBitwiseAndAssignment,
+			// tp::BinaryShiftLeftAssignment,
+			// tp::BinaryShiftRightAssignment,
+			tp::BinaryArithmeticAssignment,
 			tp::BinaryLessThanAssignment,
 			tp::BinaryLessThanEqualAssignment,
 			tp::BinaryEqualAssignment,

@@ -331,8 +331,13 @@ namespace L3::parser {
 		{};
 
 		struct ProgramRule :
-			list<
-				FunctionRule,
+			seq<
+				LineSeparatorsWithCommentsRule,
+				SpacesRule,
+				list<
+					FunctionRule,
+					LineSeparatorsWithCommentsRule
+				>,
 				LineSeparatorsWithCommentsRule
 			>
 		{};
