@@ -59,15 +59,18 @@ namespace L3::program::tiles {
 	namespace rules {
 		// In each of the CTRs, the children must agree on what the CtrOutput is
 
-		// Matches: a NoOpComputation variant of a ComputationTree
+		// Matches: a NoOpComputation variant of a ComputationTree, or one of the non-Node leaves
 		// Captures: nothing
 		template<typename CtrOutput>
 		struct EmptyCtr {
 			static bool match(ComputationTree &target, CtrOutput &o) {
 				Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target);
-				if (!node) return false;
-				if (!dynamic_cast<NoOpComputation *>(node->get())) return false;
-				return true;
+				if (node) {
+					if (!dynamic_cast<NoOpComputation *>(node->get())) return false;
+					return true;
+				} else {
+					return true;
+				}
 			}
 		};
 
@@ -967,7 +970,7 @@ namespace L3::program::tiles {
 
 	void tile_trees(Vec<Uptr<ComputationTree>> &trees, std::ostream &o) {
 		// TODO actually tile the trees instead of this placeholder
-		for (const Uptr<ComputationTree> &tree : trees) {
+		/* for (const Uptr<ComputationTree> &tree : trees) {
 			o << "\t\t - " << program::to_string(*tree) << "\n";
 
 			Opt<Uptr<tp::TilePattern>> best_match = find_best_tile(*tree);
@@ -977,12 +980,12 @@ namespace L3::program::tiles {
 				o << "no match for this one \n";
 			}
 		}
-		std::cerr << "okay real algorithm now \n";
+		std::cerr << "okay real algorithm now \n"; */
 
 		// algorithm starts here
 		// build a stack to hold pointers to the currently untiled trees.
 		// the top of the stack is for trees that must be executed later
-		/* Vec<Uptr<tp::TilePattern>> tiles; // stored in REVERSE order of execution
+		Vec<Uptr<tp::TilePattern>> tiles; // stored in REVERSE order of execution
 		Vec<ComputationTree *> untiled_trees;
 		for (const Uptr<ComputationTree> &tree : trees) {
 			untiled_trees.push_back(tree.get());
@@ -1002,7 +1005,7 @@ namespace L3::program::tiles {
 			tiles.push_back(mv(*best_match));
 		}
 		for (auto it = tiles.rbegin(); it != tiles.rend(); ++it) {
-			std::cout << (*it)->to_l2_instructions() << "\n";
-		} */
+			o << (*it)->to_l2_instructions() << "\n";
+		}
 	}
 }
