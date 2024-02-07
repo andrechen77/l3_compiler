@@ -357,6 +357,165 @@ namespace L3::program::tiles {
 				return {};
 			}
 		};
+		struct BinaryMinusAssignment : TilePattern {
+			using Captures = std::tuple<
+				Opt<Variable *>,
+				Opt<ComputationTree>,
+				Opt<ComputationTree>
+			>;
+			using O = Captures;
+			using Rule = DestCtr<O, 0,
+				BinaryCtr<O, program::Operator::minus,
+					InexplicableTCtr<O, 1>,
+					InexplicableTCtr<O, 2>
+				>
+			>;
+			static const int cost = 1;
+			static const int munch = 1;
+			Captures captures;
+
+			virtual std::string to_l2_instructions() const override {
+				const auto &[dest, lhs, rhs] = this->captures;
+				if (!dest || !lhs || !rhs) {
+					std::cerr << "Error: attempting to translate incomplete tile.";
+					exit(1);
+				}
+				std::string str = to_l2_expr(*dest) + " <- " + to_l2_expr(*lhs) + "\n";
+				str += to_l2_expr(*dest) + " -= " + to_l2_expr(*rhs) + "\n";
+				return str;
+			}
+			virtual Vec<ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		};
+		struct BinaryTimesAssignment : TilePattern {
+			using Captures = std::tuple<
+				Opt<Variable *>,
+				Opt<ComputationTree>,
+				Opt<ComputationTree>
+			>;
+			using O = Captures;
+			using Rule = DestCtr<O, 0,
+				BinaryCtr<O, program::Operator::times,
+					InexplicableTCtr<O, 1>,
+					InexplicableTCtr<O, 2>
+				>
+			>;
+			static const int cost = 1;
+			static const int munch = 1;
+
+			Captures captures;
+
+			virtual std::string to_l2_instructions() const override {
+				const auto &[dest, lhs, rhs] = this->captures;
+				if (!dest || !lhs || !rhs) {
+					std::cerr << "Error: attempting to translate incomplete tile.";
+					exit(1);
+				}
+				std::string str = to_l2_expr(*dest) + " <- " + to_l2_expr(*lhs) + "\n";
+				str += to_l2_expr(*dest) + " *= " + to_l2_expr(*rhs) + "\n";
+				return str;
+			}
+			virtual Vec<ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		};
+		struct BinaryBitwiseAndAssignment : TilePattern {
+			using Captures = std::tuple<
+				Opt<Variable *>,
+				Opt<ComputationTree>,
+				Opt<ComputationTree>
+			>;
+			using O = Captures;
+			using Rule = DestCtr<O, 0,
+				BinaryCtr<O, program::Operator::bitwise_and,
+					InexplicableTCtr<O, 1>,
+					InexplicableTCtr<O, 2>
+				>
+			>;
+			static const int cost = 1;
+			static const int munch = 1;
+
+			Captures captures;
+
+			virtual std::string to_l2_instructions() const override {
+				const auto &[dest, lhs, rhs] = this->captures;
+				if (!dest || !lhs || !rhs) {
+					std::cerr << "Error: attempting to translate incomplete tile.";
+					exit(1);
+				}
+				std::string str = to_l2_expr(*dest) + " <- " + to_l2_expr(*lhs) + "\n";
+				str += to_l2_expr(*dest) + " &= " + to_l2_expr(*rhs) + "\n";
+				return str;
+			}
+			virtual Vec<ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		};
+		struct BinaryShiftRightAssignment : TilePattern {
+			using Captures = std::tuple<
+				Opt<Variable *>,
+				Opt<ComputationTree>,
+				Opt<ComputationTree>
+			>;
+			using O = Captures;
+			using Rule = DestCtr<O, 0,
+				BinaryCtr<O, program::Operator::rshift,
+					InexplicableTCtr<O, 1>,
+					InexplicableTCtr<O, 2>
+				>
+			>;
+			static const int cost = 1;
+			static const int munch = 1;
+
+			Captures captures;
+
+			virtual std::string to_l2_instructions() const override {
+				const auto &[dest, lhs, rhs] = this->captures;
+				if (!dest || !lhs || !rhs) {
+					std::cerr << "Error: attempting to translate incomplete tile.";
+					exit(1);
+				}
+				std::string str = to_l2_expr(*dest) + " <- " + to_l2_expr(*lhs) + "\n";
+				str += to_l2_expr(*dest) + " >>= " + to_l2_expr(*rhs) + "\n";
+				return str;
+			}
+			virtual Vec<ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		};
+		struct BinaryShiftLeftAssignment : TilePattern {
+			using Captures = std::tuple<
+				Opt<Variable *>,
+				Opt<ComputationTree>,
+				Opt<ComputationTree>
+			>;
+			using O = Captures;
+			using Rule = DestCtr<O, 0,
+				BinaryCtr<O, program::Operator::lshift,
+					InexplicableTCtr<O, 1>,
+					InexplicableTCtr<O, 2>
+				>
+			>;
+			static const int cost = 1;
+			static const int munch = 1;
+
+			Captures captures;
+
+			virtual std::string to_l2_instructions() const override {
+				const auto &[dest, lhs, rhs] = this->captures;
+				if (!dest || !lhs || !rhs) {
+					std::cerr << "Error: attempting to translate incomplete tile.";
+					exit(1);
+				}
+				std::string str = to_l2_expr(*dest) + " <- " + to_l2_expr(*lhs) + "\n";
+				str += to_l2_expr(*dest) + " <<= " + to_l2_expr(*rhs) + "\n";
+				return str;
+			}
+			virtual Vec<ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		};
 
 		int num_returns = 0; // number of returns we've seen so far
 		// FUTURE ugh please do anything else
@@ -450,6 +609,11 @@ namespace L3::program::tiles {
 		attempt_tile_matches<
 			tp::PureAssignment,
 			tp::BinaryPlusAssignment,
+			tp::BinaryMinusAssignment,
+			tp::BinaryTimesAssignment,
+			tp::BinaryBitwiseAndAssignment,
+			tp::BinaryShiftLeftAssignment,
+			tp::BinaryShiftRightAssignment,
 			tp::CallVal
 		>(tree, best_match, 0, 0);
 		return best_match;
