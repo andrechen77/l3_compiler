@@ -318,7 +318,40 @@ namespace L3::program::tiles {
 					std::cerr << "Error: attempting to translate incomplete tile.";
 					exit(1);
 				}
-				return to_l2_expr(*dest) + " <- " + to_l2_expr(*src);
+				return to_l2_expr(*dest) + " <- " + to_l2_expr(*src) + "\n";
+			}
+			virtual Vec<ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		};
+
+		struct BinaryPlusAssignment : TilePattern {
+			using Captures = std::tuple<
+				Opt<Variable *>,
+				Opt<ComputationTree>,
+				Opt<ComputationTree>
+			>;
+			using O = Captures;
+			using Rule = DestCtr<O, 0,
+				BinaryCtr<O, program::Operator::plus,
+					InexplicableTCtr<O, 1>,
+					InexplicableTCtr<O, 2>
+				>
+			>;
+			static const int cost = 1;
+			static const int munch = 1;
+
+			Captures captures;
+
+			virtual std::string to_l2_instructions() const override {
+				const auto &[dest, lhs, rhs] = this->captures;
+				if (!dest || !lhs || !rhs) {
+					std::cerr << "Error: attempting to translate incomplete tile.";
+					exit(1);
+				}
+				std::string str = to_l2_expr(*dest) + " <- " + to_l2_expr(*lhs) + "\n";
+				str += to_l2_expr(*dest) + " += " + to_l2_expr(*rhs) + "\n";
+				return str;
 			}
 			virtual Vec<ComputationTree *> get_unmatched() const override {
 				return {};
@@ -407,10 +440,19 @@ namespace L3::program::tiles {
 			}
 		}
 	}
-
 	template<typename... TPs>
 	void attempt_tile_matches(ComputationTree &tree, Opt<Uptr<tp::TilePattern>> &out, int best_munch, int cost) {
 		(attempt_tile_match<TPs>(tree, out, best_munch, cost), ...);
+	}
+
+	Opt<Uptr<tp::TilePattern>> find_best_tile(ComputationTree &tree) {
+		Opt<Uptr<tp::TilePattern>> best_match;
+		attempt_tile_matches<
+			tp::PureAssignment,
+			tp::BinaryPlusAssignment,
+			tp::CallVal
+		>(tree, best_match, 0, 0);
+		return best_match;
 	}
 
 	void tile_trees(Vec<Uptr<ComputationTree>> &trees, std::ostream &o) {
@@ -418,17 +460,36 @@ namespace L3::program::tiles {
 		for (const Uptr<ComputationTree> &tree : trees) {
 			o << "\t\t - " << program::to_string(*tree) << "\n";
 
-			Opt<Uptr<tp::TilePattern>> best_match;
-			attempt_tile_matches<
-				tp::PureAssignment,
-				tp::CallVal
-			>(*tree, best_match, 0, 0);
-
+			Opt<Uptr<tp::TilePattern>> best_match = find_best_tile(*tree);
 			if (best_match) {
 				o << (*best_match)->to_l2_instructions() << "\n";
-			} else {
-				std::cerr << "Couldn't find a tile for this tree!\n";
 			}
 		}
+		std::cerr << "okay real algorithm now \n";
+
+		// algorithm starts here
+		// build a stack to hold pointers to the currently untiled trees.
+		// the top of the stack is for trees that must be executed later
+		/* Vec<Uptr<tp::TilePattern>> tiles; // stored in REVERSE order of execution
+		Vec<ComputationTree *> untiled_trees;
+		for (const Uptr<ComputationTree> &tree : trees) {
+			untiled_trees.push_back(tree.get());
+		}
+		while (!untiled_trees.empty()) {
+			// try to tile the top tree
+			ComputationTree *top_tree = untiled_trees.back();
+			untiled_trees.pop_back();
+			Opt<Uptr<tp::TilePattern>> best_match = find_best_tile(*top_tree);
+			if (!best_match) {
+				std::cerr << "Couldn't find a tile for this tree!\n";
+			}
+			for (ComputationTree *unmatched: (*best_match)->get_unmatched()) {
+				untiled_trees.push_back(unmatched);
+			}
+			tiles.push_back(mv(*best_match));
+		}
+		for (auto it = tiles.rbegin(); it != tiles.rend(); ++it) {
+			std::cout << (*it)->to_l2_instructions() << "\n";
+		} */
 	}
 }

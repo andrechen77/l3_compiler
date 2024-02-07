@@ -102,8 +102,8 @@ namespace L3::parser {
 
 		struct ComparisonOperatorRule :
 			sor<
-				TAO_PEGTL_STRING("<"),
 				TAO_PEGTL_STRING("<="),
+				TAO_PEGTL_STRING("<"),
 				TAO_PEGTL_STRING("="),
 				TAO_PEGTL_STRING(">="),
 				TAO_PEGTL_STRING(">")
