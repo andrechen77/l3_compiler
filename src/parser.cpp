@@ -225,7 +225,7 @@ namespace L3::parser {
 				TAO_PEGTL_STRING("store"),
 				VariableRule, // 0
 				ArrowRule,
-				VariableRule // 1
+				InexplicableSRule // 1
 			>
 		{};
 

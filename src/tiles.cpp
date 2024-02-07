@@ -523,10 +523,13 @@ namespace L3::program::tiles {
 		struct StoreMemory : TilePattern {
 			using Captures = std::tuple<
 				Opt<Variable *>,
-				Opt<Variable *>
+				Opt<ComputationTree>
 			>;
 			using O = Captures;
-			using Rule = StoreCtr<O, VariableCtr<O, 0>, VariableCtr<O, 1>>;
+			using Rule = StoreCtr<O,
+				VariableCtr<O, 0>,
+				InexplicableSCtr<O, 1>
+			>;
 
 			static const int cost = 1;
 			static const int munch = 1;
