@@ -299,12 +299,12 @@ namespace L3::program::tiles {
 		struct PureAssignment : TilePattern {
 			using Captures = std::tuple<
 				Opt<Variable *>,
-				Opt<Variable *>
+				Opt<ComputationTree>
 			>;
 			using O = Captures;
 			using Rule = DestCtr<O, 0,
 				MoveCtr<O,
-					VariableCtr<O, 1>
+					InexplicableSCtr<O, 1>
 				>
 			>;
 			static const int cost = 1;
