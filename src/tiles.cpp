@@ -541,7 +541,7 @@ namespace L3::program::tiles {
 					std::cerr << "Error: attempting to translate incomplete tile.";
 					exit(1);
 				}
-				return "%" + (*dest)->get_name() + " <- " + to_l2_expr(*lhs) + " < " + to_l2_expr(*rhs);
+				return "%" + (*dest)->get_name() + " <- " + to_l2_expr(*lhs) + " < " + to_l2_expr(*rhs) + "\n";
 			}
 			virtual Vec<ComputationTree *> get_unmatched() const override {
 				return {};
@@ -571,7 +571,7 @@ namespace L3::program::tiles {
 					std::cerr << "Error: attempting to translate incomplete tile.";
 					exit(1);
 				}
-				return "%" + (*dest)->get_name() + " <- " + to_l2_expr(*lhs) + " <= " + to_l2_expr(*rhs);
+				return "%" + (*dest)->get_name() + " <- " + to_l2_expr(*lhs) + " <= " + to_l2_expr(*rhs) + "\n";
 			}
 			virtual Vec<ComputationTree *> get_unmatched() const override {
 				return {};
@@ -601,7 +601,7 @@ namespace L3::program::tiles {
 					std::cerr << "Error: attempting to translate incomplete tile.";
 					exit(1);
 				}
-				return "%" + (*dest)->get_name() + " <- " + to_l2_expr(*lhs) + " = " + to_l2_expr(*rhs);
+				return "%" + (*dest)->get_name() + " <- " + to_l2_expr(*lhs) + " = " + to_l2_expr(*rhs) + "\n";
 			}
 			virtual Vec<ComputationTree *> get_unmatched() const override {
 				return {};
@@ -631,7 +631,7 @@ namespace L3::program::tiles {
 					std::cerr << "Error: attempting to translate incomplete tile.";
 					exit(1);
 				}
-				return "%" + (*dest)->get_name() + " <- " + to_l2_expr(*rhs) + " < " + to_l2_expr(*lhs);
+				return "%" + (*dest)->get_name() + " <- " + to_l2_expr(*rhs) + " < " + to_l2_expr(*lhs) + "\n";
 			}
 			virtual Vec<ComputationTree *> get_unmatched() const override {
 				return {};
@@ -661,7 +661,36 @@ namespace L3::program::tiles {
 					std::cerr << "Error: attempting to translate incomplete tile.";
 					exit(1);
 				}
-				return "%" + (*dest)->get_name() + " <- " + to_l2_expr(*rhs) + " <= " + to_l2_expr(*lhs);
+				return "%" + (*dest)->get_name() + " <- " + to_l2_expr(*rhs) + " <= " + to_l2_expr(*lhs) + "\n";
+			}
+			virtual Vec<ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		};
+
+		struct LoadMemory : TilePattern {
+			using Captures = std::tuple<
+				Opt<Variable *>,
+				Opt<Variable *>
+			>;
+			using O = Captures;
+			using Rule = DestCtr<O, 0,
+				LoadCtr<O,
+					VariableCtr<O, 1>
+				>
+			>;
+			static const int cost = 1;
+			static const int munch = 1;
+
+			Captures captures;
+
+			virtual std::string to_l2_instructions() const override {
+				const auto &[dest, source] = this->captures;
+				if (!dest || !source) {
+					std::cerr << "Error: attempting to translate incomplete tile.";
+					exit(1);
+				}
+				return to_l2_expr(*dest) + " <- " + " mem " + to_l2_expr(*source) + " 0\n";
 			}
 			virtual Vec<ComputationTree *> get_unmatched() const override {
 				return {};
@@ -770,6 +799,7 @@ namespace L3::program::tiles {
 			tp::BinaryEqualAssignment,
 			tp::BinaryGreaterThanEqualAssignment,
 			tp::BinaryGreaterThanAssignment,
+			tp::LoadMemory,
 			tp::CallVal
 		>(tree, best_match, 0, 0);
 		return best_match;
