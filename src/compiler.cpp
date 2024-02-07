@@ -2,6 +2,7 @@
 #include "parser.h"
 #include "program.h"
 #include "tiles.h"
+#include "code_gen.h"
 #include <string>
 #include <vector>
 #include <utility>
@@ -14,7 +15,7 @@
 #include <cstdlib>
 #include <stdint.h>
 #include <unistd.h>
-#include <iostream>
+#include <fstream>
 #include <assert.h>
 #include <optional>
 
@@ -67,11 +68,13 @@ int main(
 		argv[optind],
 		output_parse_tree ? std::make_optional("parse_tree.dot") : Opt<std::string>()
 	);
-	L3::program::tiles::tiletest(*p);
 
-	// if (enable_code_generator) {
-	// 	L3::code_gen::generate_code(*p);
-	// }
+	if (enable_code_generator) {
+		std::ofstream o;
+		o.open("prog.L2");
+		L3::code_gen::generate_program_code(*p, o);
+		o.close();
+	}
 
 	return 0;
 }

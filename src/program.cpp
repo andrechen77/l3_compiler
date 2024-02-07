@@ -3,6 +3,7 @@
 #include "utils.h"
 #include <assert.h>
 #include <map>
+#include <algorithm>
 
 namespace L3::program {
 	using namespace std_alias;
@@ -489,6 +490,7 @@ namespace L3::program {
 			blocks.push_back(mv(current_block));
 			next_block_nullable = temp;
 		}
+		std::reverse(blocks.begin(), blocks.end());
 
 		// bind all unbound variables to new variable items
 		for (std::string name : this->agg_scope.variable_scope.get_free_names()) {
@@ -565,6 +567,7 @@ namespace L3::program {
 			);
 			this->external_functions.emplace_back(mv(function_ptr));
 		}
+		this->agg_scope.l3_function_scope.add_ref(*this->main_function_ref);
 	}
 	Uptr<Program> Program::Builder::get_result() {
 		// TODO verify no free names

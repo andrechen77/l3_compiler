@@ -700,7 +700,6 @@ namespace L3::parser {
 		}
 
 		Uptr<L3::program::Program> ptr = node_processor::make_program((*root)[0]);
-		std::cout << ptr->to_string();
 		return ptr;
 
 		// auto p = node_processor::make_program((*root)[0]);

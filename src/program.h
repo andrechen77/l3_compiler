@@ -335,6 +335,7 @@ namespace L3::program {
 	};
 
 	struct CallComputation : ComputationNode {
+		// TODO rename to callee
 		ComputationTree function;
 		Vec<ComputationTree> arguments;
 
@@ -409,6 +410,7 @@ namespace L3::program {
 
 		const std::string &get_name() const { return this->name; }
 		Vec<Uptr<Instruction>> &get_raw_instructions() { return this->raw_instructions; }
+		const Vec<Uptr<Instruction>> &get_raw_instructions() const { return this->raw_instructions; }
 		const Vec<BasicBlock *> &get_succ_blocks() const { return this->succ_blocks; }
 
 		class Builder {
@@ -686,6 +688,8 @@ namespace L3::program {
 
 		virtual const std::string &get_name() const override { return this->name; }
 		Vec<Uptr<BasicBlock>> &get_blocks() { return this->blocks; }
+		const Vec<Uptr<BasicBlock>> &get_blocks() const { return this->blocks; }
+		const Vec<Variable *> &get_parameter_vars() const { return this->parameter_vars; }
 		virtual bool verify_argument_num(int num) const override;
 		// virtual bool get_never_returns() const override;
 		virtual std::string to_string() const override;
@@ -744,6 +748,8 @@ namespace L3::program {
 
 		std::string to_string() const;
 		Vec<Uptr<L3Function>> &get_l3_functions() { return this->l3_functions; }
+		const Vec<Uptr<L3Function>> &get_l3_functions() const { return this->l3_functions; }
+		const ItemRef<L3Function> &get_main_function_ref() const { return *this->main_function_ref; }
 
 		class Builder {
 			Vec<Uptr<L3Function>> l3_functions;

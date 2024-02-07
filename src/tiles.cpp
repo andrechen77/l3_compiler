@@ -228,6 +228,13 @@ namespace L3::program::tiles {
 		}
 	}
 
+	void tile_trees(Vec<Uptr<ComputationTree>> &trees, std::ostream &o) {
+		// TODO actually tile the trees instead of this placeholder
+		for (const Uptr<ComputationTree> &tree : trees) {
+			o << "\t\t" << program::to_string(*tree) << "\n";
+		}
+	}
+
 	void tiletest(Program &program) {
 		// get a basic block to play with
 
