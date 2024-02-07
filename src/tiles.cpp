@@ -284,6 +284,7 @@ namespace L3::program::tiles {
 	// - member type Rule with Rule::match(ComputationTree &) works
 	// - static function std::string to_l2_function(const O &o)
 	// - static member int cost
+	// - static member int munch
 
 	namespace tile_patterns {
 		using namespace rules;
@@ -295,7 +296,7 @@ namespace L3::program::tiles {
 			virtual Vec<ComputationTree *> get_unmatched() const = 0;
 		};
 
-		struct Assignment : TilePattern {
+		struct PureAssignment : TilePattern {
 			using Captures = std::tuple<
 				Opt<Variable *>,
 				Opt<Variable *>
@@ -307,6 +308,7 @@ namespace L3::program::tiles {
 				>
 			>;
 			static const int cost = 1;
+			static const int munch = 2;
 
 			Captures captures;
 
@@ -316,7 +318,7 @@ namespace L3::program::tiles {
 					std::cerr << "Error: attempting to translate incomplete tile.";
 					exit(1);
 				}
-				return "%" + (*dest)->get_name() + " <- %" + (*src)->get_name();
+				return to_l2_expr(*dest) + " <- " + to_l2_expr(*src);
 			}
 			virtual Vec<ComputationTree *> get_unmatched() const override {
 				return {};
@@ -339,6 +341,7 @@ namespace L3::program::tiles {
 				>
 			>;
 			static const int cost = 1;
+			static const int munch = 1;
 
 			Captures captures;
 
@@ -415,7 +418,7 @@ namespace L3::program::tiles {
 
 			Vec<Uptr<tp::TilePattern>> matched_tiles;
 			attempt_tile_matches<
-				tp::Assignment,
+				tp::PureAssignment,
 				tp::CallVal
 			>(*tree, matched_tiles);
 
