@@ -594,7 +594,7 @@ namespace L3::program::tiles {
 					std::cerr << "Error: attempting to translate incomplete tile.";
 					exit(1);
 				}
-				return "cjump 0 < " + to_l2_expr(*condition) + " " + to_l2_expr(*dest);
+				return "cjump " + to_l2_expr(*condition) + " = 1 " + to_l2_expr(*dest);
 			}
 			virtual Vec<ComputationTree *> get_unmatched() const override {
 				return {};

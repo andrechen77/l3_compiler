@@ -72,6 +72,10 @@ namespace L3::parser {
 			>
 		{};
 
+		struct SpacesOrNewLines :
+			star<sor<SpaceRule, eol>>
+		{};
+
 		struct NameRule :
 			ascii::identifier // the rules for L3 names are the same as for C identifiers
 		{};
@@ -317,15 +321,18 @@ namespace L3::parser {
 		{};
 
 		struct FunctionRule :
-			interleaved<
-				SpacesRule,
-				TAO_PEGTL_STRING("define"),
-				L3FunctionNameRule,
-				one<'('>,
-				DefArgsRule,
-				one<')'>,
-				one<'{'>,
+			seq<
+				interleaved<
+					SpacesOrNewLines,
+					TAO_PEGTL_STRING("define"),
+					L3FunctionNameRule,
+					one<'('>,
+					DefArgsRule,
+					one<')'>,
+					one<'{'>
+				>,
 				InstructionsRule,
+				SpacesRule,
 				one<'}'>
 			>
 		{};
@@ -335,7 +342,10 @@ namespace L3::parser {
 				LineSeparatorsWithCommentsRule,
 				SpacesRule,
 				list<
-					FunctionRule,
+					seq<
+						SpacesRule,
+						FunctionRule
+					>,
 					LineSeparatorsWithCommentsRule
 				>,
 				LineSeparatorsWithCommentsRule
