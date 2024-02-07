@@ -263,25 +263,43 @@ namespace L3::program::tiles {
 		};
 	};
 
-	template<typename TilePattern>
-	Opt<TilePattern> attempt_tile_match(ComputationTree &tree) {
-		TilePattern result;
-		if (TilePattern::Rule::match(tree, result.captures)) {
+	namespace tp = tile_patterns;
+
+	template<typename TP>
+	Opt<Uptr<TP>> attempt_tile_match(ComputationTree &tree) {
+		Uptr<TP> result = mkuptr<TP>();
+		if (TP::Rule::match(tree, result->captures)) {
 			return result;
 		} else {
 			return {};
 		}
 	}
 
-	void tile_trees(Vec<Uptr<ComputationTree>> &trees, std::ostream &o) {
-		namespace tp = tile_patterns;
+	template<typename TP>
+	void attempt_tile_match(ComputationTree &tree, Vec<Uptr<tp::TilePattern>> &out) {
+		Opt<Uptr<TP>> result = attempt_tile_match<TP>(tree);
+		if (result) {
+			out.push_back(mv(*result));
+		}
+	}
 
+	template<typename... TPs>
+	void attempt_tile_matches(ComputationTree &tree, Vec<Uptr<tp::TilePattern>> &out) {
+		(attempt_tile_match<TPs>(tree, out), ...);
+	}
+
+	void tile_trees(Vec<Uptr<ComputationTree>> &trees, std::ostream &o) {
 		// TODO actually tile the trees instead of this placeholder
 		for (const Uptr<ComputationTree> &tree : trees) {
 			o << "\t\t - " << program::to_string(*tree) << "\n";
-			Opt<tp::Assignment> res = attempt_tile_match<tp::Assignment>(*tree);
-			if (res) {
-				o << "\t\t" << res->to_l2_instructions() << "\n";
+
+			Vec<Uptr<tp::TilePattern>> matched_tiles;
+			attempt_tile_matches<
+				tp::Assignment
+			>(*tree, matched_tiles);
+
+			for (const Uptr<tp::TilePattern> &tile : matched_tiles) {
+				o << "\t\t" << tile->to_l2_instructions() << "\n";
 			}
 		}
 	}

@@ -40,6 +40,7 @@ namespace L3::program {
 	struct ComputationNode;
 	using ComputationTree = std::variant<
 		Variable *,
+		BasicBlock *,
 		Function *,
 		int64_t,
 		Uptr<ComputationNode>

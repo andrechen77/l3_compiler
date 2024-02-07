@@ -36,8 +36,11 @@ namespace L3::program {
 		agg_scope.label_scope.add_ref(*this);
 	}
 	template<> ComputationTree ItemRef<BasicBlock>::to_computation_tree() const {
-		std::cerr << "Error: can't convert label name to computation tree.\n";
-		exit(1);
+		if (!this->referent_nullable) {
+			std::cerr << "Error: can't convert free label name to computation tree.\n";
+			exit(1);
+		}
+		return this->referent_nullable;
 	}
 	template<> std::string ItemRef<L3Function>::to_string() const {
 		std::string result = "@" + this->get_ref_name();
@@ -294,6 +297,8 @@ namespace L3::program {
 	std::string to_string(const ComputationTree &tree) {
 		if (Variable *const *variable = std::get_if<Variable *>(&tree)) {
 			return program::to_string(*variable);
+		} else if (BasicBlock *const *block = std::get_if<BasicBlock *>(&tree)) {
+			return program::to_string(*block);
 		} else if (Function *const *function = std::get_if<Function *>(&tree)) {
 			return program::to_string(*function);
 		} else if (const int64_t *value = std::get_if<int64_t>(&tree)) {
