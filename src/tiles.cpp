@@ -845,7 +845,7 @@ namespace L3::program::tiles {
 					std::cerr << "Error: attempting to translate incomplete tile.";
 					exit(1);
 				}
-				std::string str= "%rax <- " + to_l2_expr(*return_val) + "\n";
+				std::string str= "rax <- " + to_l2_expr(*return_val) + "\n";
 				str += "return\n";
 				return str;
 			}
@@ -895,7 +895,7 @@ namespace L3::program::tiles {
 					num_returns += 1;
 					result += "mem rsp -8 <- " + return_label + "\n";
 				}
-				result += "call " + to_l2_expr(callee) + std::to_string(args.size()) + "\n";
+				result += "call " + to_l2_expr(callee) + " " + std::to_string(args.size()) + "\n";
 				if (is_l3) {
 					result += return_label + "\n";
 				}
