@@ -71,6 +71,38 @@ namespace L3::program::tiles {
 			}
 		};
 
+		// Matches: A Variable * or int64_t variant of ComputationTree
+		// Captures: a copy of the ComputationTree
+		template<typename CtrOutput, int index>
+		struct InexplicableTCtr {
+			static bool match(ComputationTree &target, CtrOutput &o) {
+				if (std::holds_alternative<Variable *>(target)
+					|| std::holds_alternative<int64_t>(target))
+				{
+					if (!bind_capture<index>(o, target)) return false;
+					return true;
+				}
+				return false;
+			}
+		};
+
+		// Matches: A Variable * or BasicBlock * or Function * or int64_t variant of ComputationTree
+		// Captures: a copy of the ComputationTree
+		template<typename CtrOutput, int index>
+		struct InexplicableSCtr {
+			static bool match(ComputationTree &target, CtrOutput &o) {
+				if (std::holds_alternative<Variable *>(target)
+					|| std::holds_alternative<BasicBlock *>(target)
+					|| std::holds_alternative<Function *>(target)
+					|| std::holds_alternative<int64_t>(target))
+				{
+					if (!bind_capture<index>(o, target)) return false;
+					return true;
+				}
+				return false;
+			}
+		};
+
 		// Matches: any ComputationNode variant of ComputationTree
 		// Captures: the Opt<Variable *> in the node's destination field
 		template<typename CtrOutput, int index, typename NodeCtr>
