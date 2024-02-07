@@ -24,7 +24,7 @@ namespace L3::code_gen {
 		const Vec<Variable *> &parameter_vars = l3_function.get_parameter_vars();
 		for (int i = 0; i < parameter_vars.size(); ++i) {
 			o << "\t\t" << target_arch::get_argument_loading_instruction(
-				parameter_vars[i]->get_name(),
+				target_arch::to_l2_expr(parameter_vars[i]),
 				i,
 				parameter_vars.size()
 			) << "\n";

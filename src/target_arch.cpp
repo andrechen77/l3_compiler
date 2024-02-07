@@ -6,14 +6,14 @@ namespace L3::code_gen::target_arch {
 		"rdi", "rsi", "rdx", "rcx", "r8", "r9"
 	};
 
-	std::string get_argument_loading_instruction(const std::string &arg_name, int argument_index, int num_args) {
+	std::string get_argument_loading_instruction(const std::string &l2_syntax, int argument_index, int num_args) {
 		assert(argument_index >= 0 && num_args > argument_index);
 		if (argument_index < 6) {
-			return "%" + arg_name + " <- " + register_args[argument_index];
+			return l2_syntax + " <- " + register_args[argument_index];
 		}
 
 		int64_t rsp_offset = WORD_SIZE * (num_args - argument_index - 1);
-		return "%" + arg_name + " <- stack-arg " + std::to_string(rsp_offset);
+		return l2_syntax + " <- stack-arg " + std::to_string(rsp_offset);
 	}
 
 	std::string get_argument_prepping_instruction(const std::string &l2_syntax, int argument_index) {

@@ -459,12 +459,32 @@ namespace L3::program::tiles {
 			Captures captures;
 
 			virtual std::string to_l2_instructions() const override {
-				const auto &[dest, op, lhs, rhs] = this->captures;
-				if (!dest || !op || !lhs || !rhs) {
+				const auto &[dest, maybe_op, lhs, rhs] = this->captures;
+				if (!dest || !maybe_op || !lhs || !rhs) {
 					std::cerr << "Error: attempting to translate incomplete tile.";
 					exit(1);
 				}
-				return to_l2_expr(*dest) + " <- " + to_l2_expr(*lhs) + " " + program::to_string(*op) + " " + to_l2_expr(*rhs) + "\n";
+
+				// if we use gt or ge, mirror the operator and swap the operands
+				Operator op = *maybe_op;
+				const ComputationTree *lhs_ptr = &*lhs;
+				const ComputationTree *rhs_ptr = &*rhs;
+				switch (op) {
+					case Operator::gt:
+						op = Operator::lt;
+						lhs_ptr = &*rhs;
+						rhs_ptr = &*lhs;
+						break;
+					case Operator::ge:
+						op = Operator::le;
+						lhs_ptr = &*rhs;
+						rhs_ptr = &*lhs;
+						break;
+				}
+				return to_l2_expr(*dest) + " <- "
+					+ to_l2_expr(*lhs_ptr) + " "
+					+ program::to_string(op) + " "
+					+ to_l2_expr(*rhs_ptr) + "\n";
 			}
 			virtual Vec<ComputationTree *> get_unmatched() const override {
 				return {};
@@ -631,13 +651,13 @@ namespace L3::program::tiles {
 		struct CallVal : TilePattern {
 			using Captures = std::tuple<
 				Opt<Opt<Variable *>>,
-				Opt<Function *>,
+				Opt<ComputationTree *>,
 				Opt<Vec<ComputationTree *>>
 			>;
 			using O = Captures;
 			using Rule = MaybeDestCtr<O, 0,
 				CallCtr<O, 2,
-					FunctionCtr<O, 1>
+					AnyCtr<O, 1>
 				>
 			>;
 			static const int cost = 1;
@@ -652,22 +672,25 @@ namespace L3::program::tiles {
 					exit(1);
 				}
 				const Opt<Variable *> dest = *maybe_dest;
-				const Function *callee = *maybe_callee;
+				const ComputationTree *callee = *maybe_callee;
 				const Vec<ComputationTree *> &args = *maybe_args;
 
 				std::string result;
 				for (int i = 0; i < args.size(); ++i) {
 					result += get_argument_prepping_instruction(to_l2_expr(*args[i]), i) + "\n";
 				}
-				bool is_l3 = dynamic_cast<const L3Function *>(callee);
+
+				Function *const *maybe_fun_ptr = std::get_if<Function *>(callee);
+				bool is_std = maybe_fun_ptr && dynamic_cast<const ExternalFunction *>(*maybe_fun_ptr);
+
 				std::string return_label;
-				if (is_l3) {
+				if (!is_std) {
 					return_label = ":ret" + std::to_string(num_returns);
 					num_returns += 1;
 					result += "mem rsp -8 <- " + return_label + "\n";
 				}
-				result += "call " + to_l2_expr(callee) + " " + std::to_string(args.size()) + "\n";
-				if (is_l3) {
+				result += "call " + to_l2_expr(*callee) + " " + std::to_string(args.size()) + "\n";
+				if (!is_std) {
 					result += return_label + "\n";
 				}
 				if (dest) {
@@ -681,6 +704,7 @@ namespace L3::program::tiles {
 					std::cerr << "Error: incomplete tile.";
 					exit(1);
 				}
+				// TODO add callee here
 				return *args;
 			}
 		};
