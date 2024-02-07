@@ -8,7 +8,7 @@ namespace L3::code_gen::target_arch {
 
 	std::string get_argument_loading_instruction(const std::string &l2_syntax, int argument_index, int num_args) {
 		assert(argument_index >= 0 && num_args > argument_index);
-		if (argument_index < 6) {
+		if (argument_index < NUM_ARG_REGISTERS) {
 			return l2_syntax + " <- " + register_args[argument_index];
 		}
 
@@ -18,11 +18,11 @@ namespace L3::code_gen::target_arch {
 
 	std::string get_argument_prepping_instruction(const std::string &l2_syntax, int argument_index) {
 		assert(argument_index >= 0);
-		if (argument_index < 6) {
+		if (argument_index < NUM_ARG_REGISTERS) {
 			return register_args[argument_index] + " <- " + l2_syntax;
 		}
 
-		int64_t rsp_offset = -WORD_SIZE * (argument_index + 2);
+		int64_t rsp_offset = -WORD_SIZE * (argument_index - NUM_ARG_REGISTERS + 2); // 2 because simply offsetting by 1 would collide with return address
 		return "mem rsp " + std::to_string(rsp_offset) + " <- " + l2_syntax;
 	}
 

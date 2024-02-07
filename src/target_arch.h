@@ -8,6 +8,7 @@ namespace L3::code_gen::target_arch {
 	using namespace std_alias;
 	using namespace L3::program;
 
+	const int NUM_ARG_REGISTERS = 6;
 	const int64_t WORD_SIZE = 8; // in bytes
 
 	// follows the L2 calling convention
