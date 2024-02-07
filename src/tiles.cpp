@@ -219,21 +219,70 @@ namespace L3::program::tiles {
 		};
 	}
 
-	template<typename CtrOutput, typename Ctr>
-	Opt<CtrOutput> attempt_match(ComputationTree &tree) {
-		// TODO microoptimization for RVO?
-		CtrOutput o;
-		if (Ctr::match(tree, o)) {
-			return o;
+	// A TilePattern is a struct with:
+	// - member type Captures describing the capture variables of the tile
+	// - member type Rule with Rule::match(ComputationTree &) works
+	// - static function std::string to_l2_function(const O &o)
+	// - static member int cost
+
+	namespace tile_patterns {
+		using namespace rules;
+
+		// interface
+		struct TilePattern {
+			virtual std::string to_l2_instructions() const = 0;
+			virtual Vec<ComputationTree *> get_unmatched() const = 0;
+		};
+
+		struct Assignment : TilePattern {
+			using Captures = std::tuple<
+				Opt<Variable *>,
+				Opt<Variable *>
+			>;
+			using O = Captures;
+			using Rule = DestCtr<O, 0,
+				MoveCtr<O,
+					VariableCtr<O, 1>
+				>
+			>;
+			static const int cost = 1;
+
+			Captures captures;
+
+			virtual std::string to_l2_instructions() const override {
+				const auto &[dest, src] = this->captures;
+				if (!dest || !src) {
+					std::cerr << "Error: attempting to translate incomplete tile.";
+					exit(1);
+				}
+				return "%" + (*dest)->get_name() + " <- %" + (*src)->get_name();
+			}
+			virtual Vec<ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		};
+	};
+
+	template<typename TilePattern>
+	Opt<TilePattern> attempt_tile_match(ComputationTree &tree) {
+		TilePattern result;
+		if (TilePattern::Rule::match(tree, result.captures)) {
+			return result;
 		} else {
 			return {};
 		}
 	}
 
 	void tile_trees(Vec<Uptr<ComputationTree>> &trees, std::ostream &o) {
+		namespace tp = tile_patterns;
+
 		// TODO actually tile the trees instead of this placeholder
 		for (const Uptr<ComputationTree> &tree : trees) {
-			o << "\t\t" << program::to_string(*tree) << "\n";
+			o << "\t\t - " << program::to_string(*tree) << "\n";
+			Opt<tp::Assignment> res = attempt_tile_match<tp::Assignment>(*tree);
+			if (res) {
+				o << "\t\t" << res->to_l2_instructions() << "\n";
+			}
 		}
 	}
 }
