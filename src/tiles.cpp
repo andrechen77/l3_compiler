@@ -399,16 +399,18 @@ namespace L3::program::tiles {
 	}
 
 	template<typename TP>
-	void attempt_tile_match(ComputationTree &tree, Vec<Uptr<tp::TilePattern>> &out) {
-		Opt<Uptr<TP>> result = attempt_tile_match<TP>(tree);
-		if (result) {
-			out.push_back(mv(*result));
+	void attempt_tile_match(ComputationTree &tree, Opt<Uptr<tp::TilePattern>> &out, int best_munch, int cost) {
+		if (TP::munch > best_munch || (TP::munch == best_munch && TP::cost < cost)) {
+			Opt<Uptr<TP>> result = attempt_tile_match<TP>(tree);
+			if (result) {
+				out = mv(*result);
+			}
 		}
 	}
 
 	template<typename... TPs>
-	void attempt_tile_matches(ComputationTree &tree, Vec<Uptr<tp::TilePattern>> &out) {
-		(attempt_tile_match<TPs>(tree, out), ...);
+	void attempt_tile_matches(ComputationTree &tree, Opt<Uptr<tp::TilePattern>> &out, int best_munch, int cost) {
+		(attempt_tile_match<TPs>(tree, out, best_munch, cost), ...);
 	}
 
 	void tile_trees(Vec<Uptr<ComputationTree>> &trees, std::ostream &o) {
@@ -416,14 +418,16 @@ namespace L3::program::tiles {
 		for (const Uptr<ComputationTree> &tree : trees) {
 			o << "\t\t - " << program::to_string(*tree) << "\n";
 
-			Vec<Uptr<tp::TilePattern>> matched_tiles;
+			Opt<Uptr<tp::TilePattern>> best_match;
 			attempt_tile_matches<
 				tp::PureAssignment,
 				tp::CallVal
-			>(*tree, matched_tiles);
+			>(*tree, best_match, 0, 0);
 
-			for (const Uptr<tp::TilePattern> &tile : matched_tiles) {
-				o << tile->to_l2_instructions() << "\n";
+			if (best_match) {
+				o << (*best_match)->to_l2_instructions() << "\n";
+			} else {
+				std::cerr << "Couldn't find a tile for this tree!\n";
 			}
 		}
 	}
