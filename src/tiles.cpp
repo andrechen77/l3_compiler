@@ -22,6 +22,12 @@ namespace L3::program::tiles {
 	// parsing rule but instead of matching characters it matches parts of
 	// a computation tree.
 
+	// FUTURE perhaps each CTR should just be a function template, instead of
+	// a struct template with a static `match` method. This would remove one
+	// level of indentation and allow us to specify function signatures in the
+	// template parameters, so you get slightly more helpful error messages
+	// when you write an incorrect rule.
+
 	// A CtrOutput should be an std::tuple of optional elements representing
 	// what has been currently matched
 
