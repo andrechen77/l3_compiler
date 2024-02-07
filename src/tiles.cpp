@@ -723,6 +723,58 @@ namespace L3::program::tiles {
 			}
 		};
 
+		struct BranchUnconditional : TilePattern {
+			using Captures = std::tuple<
+				Opt<BasicBlock *>
+			>;
+			using O = Captures;
+			using Rule = BranchCtr<O, 0, NoneOptCtr<O>>;
+			static const int cost = 1;
+			static const int munch = 1;
+
+			Captures captures;
+
+			virtual std::string to_l2_instructions() const override {
+				const auto &[dest] = this->captures;
+				if (!dest) {
+					std::cerr << "Error: attempting to translate incomplete tile.";
+					exit(1);
+				}
+				return "goto " + to_l2_expr(*dest);
+			}
+			virtual Vec<ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		};
+		struct BranchConditional : TilePattern {
+			using Captures = std::tuple<
+				Opt<BasicBlock *>,
+				Opt<ComputationTree>
+			>;
+			using O = Captures;
+			using Rule = BranchCtr<O, 0,
+				SomeOptCtr<O,
+					InexplicableTCtr<O, 1>
+				>
+			>;
+			static const int cost = 1;
+			static const int munch = 1;
+
+			Captures captures;
+
+			virtual std::string to_l2_instructions() const override {
+				const auto &[dest, condition] = this->captures;
+				if (!dest) {
+					std::cerr << "Error: attempting to translate incomplete tile.";
+					exit(1);
+				}
+				return "cjump 0 < " + to_l2_expr(*condition) + " " + to_l2_expr(*dest);
+			}
+			virtual Vec<ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		};
+
 		int num_returns = 0; // number of returns we've seen so far
 		// FUTURE ugh please do anything else
 
@@ -827,6 +879,8 @@ namespace L3::program::tiles {
 			tp::BinaryGreaterThanAssignment,
 			tp::LoadMemory,
 			tp::StoreMemory,
+			tp::BranchConditional,
+			tp::BranchUnconditional,
 			tp::CallVal
 		>(tree, best_match, 0, 0);
 		return best_match;
