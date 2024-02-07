@@ -306,13 +306,17 @@ namespace L3::program {
 
 	// represents a computation from a series of instructions, starting with
 	// the leaves as input and ultimately outputting the root.
-	// Instantiating just this class instead of one of its subclasses represents
-	// a no-op.
 	struct ComputationNode {
 		Opt<Variable *> destination; // none if this computation is only for its side effects
 
 		ComputationNode(Opt<Variable *> destination) : destination { destination } {}
 		virtual std::string to_string() const;
+	};
+
+	struct NoOpComputation : ComputationNode {
+		// notice there is no destination
+		NoOpComputation() : ComputationNode({}) {}
+		virtual std::string to_string() const override;
 	};
 
 	struct MoveComputation : ComputationNode {

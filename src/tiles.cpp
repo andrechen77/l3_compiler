@@ -59,6 +59,18 @@ namespace L3::program::tiles {
 	namespace rules {
 		// In each of the CTRs, the children must agree on what the CtrOutput is
 
+		// Matches: a NoOpComputation variant of a ComputationTree
+		// Captures: nothing
+		template<typename CtrOutput>
+		struct EmptyCtr {
+			static bool match(ComputationTree &target, CtrOutput &o) {
+				Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target);
+				if (!node) return false;
+				if (!dynamic_cast<NoOpComputation *>(node->get())) return false;
+				return true;
+			}
+		};
+
 		// Matches: A Variable * variant of ComputationTree
 		// Captures: the Variable *
 		template<typename CtrOutput, int index>
@@ -294,6 +306,23 @@ namespace L3::program::tiles {
 		struct TilePattern {
 			virtual std::string to_l2_instructions() const = 0;
 			virtual Vec<ComputationTree *> get_unmatched() const = 0;
+		};
+
+		struct NoOp : TilePattern {
+			using Captures = std::tuple<>;
+			using O = Captures;
+			using Rule = EmptyCtr<O>;
+			static const int cost = 1;
+			static const int munch = 2;
+
+			Captures captures;
+
+			virtual std::string to_l2_instructions() const override {
+				return "\n";
+			}
+			virtual Vec<ComputationTree *> get_unmatched() const override {
+				return {};
+			}
 		};
 
 		struct PureAssignment : TilePattern {
@@ -865,6 +894,7 @@ namespace L3::program::tiles {
 	Opt<Uptr<tp::TilePattern>> find_best_tile(ComputationTree &tree) {
 		Opt<Uptr<tp::TilePattern>> best_match;
 		attempt_tile_matches<
+			tp::NoOp,
 			tp::PureAssignment,
 			tp::BinaryPlusAssignment,
 			tp::BinaryMinusAssignment,

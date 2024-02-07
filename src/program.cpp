@@ -256,7 +256,7 @@ namespace L3::program {
 	void InstructionLabel::bind_to_scope(AggregateScope &agg_scope) {}
 	Uptr<ComputationNode> InstructionLabel::to_computation_tree() const {
 		// InstructionLabels don't do anything, so output a no-op tree
-		return mkuptr<ComputationNode>(Opt<Variable *>());
+		return mkuptr<NoOpComputation>();
 	}
 	std::string InstructionLabel::to_string() const {
 		return ":" + this->label_name;
@@ -313,6 +313,11 @@ namespace L3::program {
 
 	std::string ComputationNode::to_string() const {
 		return "CT Node ("
+			+ utils::to_string<Variable *, program::to_string>(this->destination)
+			+ ") {}";
+	}
+	std::string NoOpComputation::to_string() const {
+		return "CT NoOp ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") {}";
 	}
