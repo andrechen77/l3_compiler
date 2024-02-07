@@ -1,6 +1,7 @@
 #include "code_gen.h"
 #include "std_alias.h"
 #include "tiles.h"
+#include "target_arch.h"
 
 namespace L3::code_gen {
 	using namespace std_alias;
@@ -15,12 +16,30 @@ namespace L3::code_gen {
 	}
 
 	void generate_l3_function_code(const L3::program::L3Function &l3_function, std::ostream &o) {
+		// function header
 		o << "\t(@" << l3_function.get_name()
 			<< " " << l3_function.get_parameter_vars().size() << "\n";
+
+		// assign parameter registers to variables
+		const Vec<Variable *> &parameter_vars = l3_function.get_parameter_vars();
+		for (int i = 0; i < parameter_vars.size(); ++i) {
+			o << "\t\t" << target_arch::get_argument_loading_instruction(
+				parameter_vars[i]->get_name(),
+				i,
+				parameter_vars.size()
+			) << "\n";
+		}
+
+		// print each block
 		for (const Uptr<BasicBlock> &block : l3_function.get_blocks()) {
+			if (block->get_name().size() > 0) {
+				o << "\t\t:" << l3_function.get_name() << "_" << block->get_name() << "\n";
+			}
 			Vec<Uptr<ComputationTree>> computation_trees = calculate_computation_trees(*block);
 			tiles::tile_trees(computation_trees, o);
 		}
+
+		// close
 		o << "\t)\n";
 	}
 
