@@ -103,14 +103,15 @@ namespace L3::program::tiles {
 			}
 		};
 
-		// Matches: any ComputationNode variant of ComputationTree
-		// Captures: the Opt<Variable *> in the node's destination field
+		// Matches: a ComputationNode variant of ComputationTree if there is a destination variable
+		// Captures: the Variable * in the node's destination field
 		template<typename CtrOutput, int index, typename NodeCtr>
 		struct DestCtr {
 			static bool match(ComputationTree &target, CtrOutput &o) {
 				Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target);
 				if (!node) return false;
-				if (!bind_capture<index>(o, (*node)->destination)) return false;
+				if (!(*node)->destination) return false;
+				if (!bind_capture<index>(o, *(*node)->destination)) return false;
 				if (!NodeCtr::match(target, o)) return false;
 				return true;
 			}
@@ -160,7 +161,7 @@ namespace L3::program::tiles {
 			}
 		};
 
-		// Matches: a BinaryComputation variant of ComputationTree
+		// Matches: a BinaryComputation variant of ComputationTree with the specified operator
 		// Captures: nothing
 		template<typename CtrOutput, Operator op, typename LhsCtr, typename RhsCtr>
 		struct BinaryCtr {
