@@ -711,7 +711,7 @@ namespace L3::program::tiles {
 				return *args;
 			}
 		};
-	};
+	}
 
 	namespace tp = tile_patterns;
 
