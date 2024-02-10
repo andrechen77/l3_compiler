@@ -3,6 +3,6 @@ bin
 obj
 tests
 prog.L2
-./a.out
+a.out
 parse_tree.dot
 parse_tree.svg
