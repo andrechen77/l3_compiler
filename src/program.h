@@ -400,16 +400,25 @@ namespace L3::program {
 
 		public:
 
-		ComputationTreeBox(const Instruction &inst); // TODO; generates initial vars_read and vars_written
-		const Set<Variable *> &get_variables_read() const; // TODO; boilerplate
-		const Set<Variable *> &get_variables_written() const; // TODO; boilerplate
-		void merge(Variable *var, ComputationTreeBox &other); // TODO; steals from the other ComputationTreeBox and merges on the specified variable; fails if the other box doesn't write to the same variable
+		ComputationTreeBox(const Instruction &inst);
+		const Set<Variable *> &get_variables_read() const { return this->vars_read; }
+		const Set<Variable *> &get_variables_written() const { return this->vars_written; }
+
+		// steals from the other ComputationTreeBox and merges on the specified
+		// variable; fails if the other box doesn't write to the same variable
+		void merge(Variable *var, ComputationTreeBox &other);
 	};
 
 	class BasicBlock {
 		std::string name; // the empty string is treated as a lack of name; we can't just have an optional because ItemRef<BasicBlock> demans that the get_name method always returns a string
 		Vec<Uptr<Instruction>> raw_instructions;
-		Vec<Uptr<ComputationTreeBox>> computation_trees;
+		Vec<Uptr<ComputationTreeBox>> tree_boxes;
+		struct VarLiveness {
+			Set<Variable *> gen_set;
+			Set<Variable *> kill_set;
+			Set<Variable *> in_set;
+			Set<Variable *> out_set;
+		} var_liveness;
 		// sequential instructions
 		// always ends with a call, branch, or return
 		// labels can only appear in the beginning
@@ -435,8 +444,8 @@ namespace L3::program {
 		Vec<Uptr<Instruction>> &get_raw_instructions() { return this->raw_instructions; }
 		const Vec<Uptr<Instruction>> &get_raw_instructions() const { return this->raw_instructions; }
 		const Vec<BasicBlock *> &get_succ_blocks() const { return this->succ_blocks; }
-		void generate_computation_trees(); // TODO; also generates the gen set since that can be found locally
-		bool update_in_out_sets(); // TODO; returns whether anything changed
+		void generate_computation_trees(); // also generates the gen and kill sets
+		bool update_in_out_sets();
 
 		class Builder {
 			Uptr<BasicBlock> fetus;

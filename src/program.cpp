@@ -384,7 +384,39 @@ namespace L3::program {
 			+ " }";
 	}
 
+	ComputationTreeBox::ComputationTreeBox(const Instruction &inst) :
+		root_nullable { inst.to_computation_tree() },
+		vars_read {},
+		vars_written {}
+	{
+		// TODO calculate vars_read and vars_written
+	}
+	void ComputationTreeBox::merge(Variable *var, ComputationTreeBox &other) {
+		// TODO
+		std::cout << "unimplemented: doing a single merge\n";
+	}
+
 	BasicBlock::BasicBlock() {} // default-initialize everything
+	void BasicBlock::generate_computation_trees() {
+		// generate the computation trees
+		for (const Uptr<Instruction> &inst : this->raw_instructions) {
+			this->tree_boxes.push_back(mkuptr<ComputationTreeBox>(*inst));
+		}
+
+		// generate the gen and kill set
+		// the algorithm starts at the end of the block
+		VarLiveness &l = this->var_liveness;
+		for (auto it = this->tree_boxes.rbegin(); it != this->tree_boxes.rend(); ++it) {
+			l.kill_set += (*it)->get_variables_written();
+			l.gen_set -= (*it)->get_variables_written();
+			l.gen_set += (*it)->get_variables_read();
+		}
+	}
+	bool BasicBlock::update_in_out_sets() {
+		// TODO; returns whether anything changed
+		std::cerr << "updating in/out sets...\n";
+		return false;
+	}
 	BasicBlock::Builder::Builder() :
 		fetus { Uptr<BasicBlock>(new BasicBlock()) },
 		succ_block_refs {},

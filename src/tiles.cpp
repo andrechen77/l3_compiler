@@ -86,7 +86,7 @@ namespace L3::code_gen::tiles {
 				if (!ChildCtr::match(target, o)) return false;
 				return std::get<index0>(o) == std::get<index1>(o);
 			}
-		}
+		};
 
 		// Matches: A Variable * variant of ComputationTree
 		// Captures: the Variable *
