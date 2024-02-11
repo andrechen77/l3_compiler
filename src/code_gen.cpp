@@ -7,6 +7,9 @@ namespace L3::code_gen {
 	using namespace std_alias;
 	using namespace L3::program;
 
+	// TODO: this module should assume that data flow has been generated
+	// (this means deleting calculate_computation trees)
+
 	Vec<Uptr<ComputationTree>> calculate_computation_trees(const BasicBlock &block) {
 		Vec<Uptr<ComputationTree>> result;
 		for (const Uptr<Instruction> &inst : block.get_raw_instructions()) {

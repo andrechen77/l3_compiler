@@ -390,9 +390,26 @@ namespace L3::program {
 		virtual std::string to_string() const override;
 	};
 
+	// meant to hold a computation tree as well as all the information that comes
+	// along with it: variables read and variables written, as well as all
+	// possible merge candidates
+	class ComputationTreeBox {
+		Uptr<ComputationNode> root_nullable; // null means this box has been stolen from in a merge
+		Set<Variable *> vars_read;
+		Set<Variable *> vars_written;
+
+		public:
+
+		ComputationTreeBox(const Instruction &inst); // TODO; generates initial vars_read and vars_written
+		const Set<Variable *> &get_variables_read() const; // TODO; boilerplate
+		const Set<Variable *> &get_variables_written() const; // TODO; boilerplate
+		void merge(Variable *var, ComputationTreeBox &other); // TODO; steals from the other ComputationTreeBox and merges on the specified variable; fails if the other box doesn't write to the same variable
+	};
+
 	class BasicBlock {
 		std::string name; // the empty string is treated as a lack of name; we can't just have an optional because ItemRef<BasicBlock> demans that the get_name method always returns a string
 		Vec<Uptr<Instruction>> raw_instructions;
+		Vec<Uptr<ComputationTreeBox>> computation_trees;
 		// sequential instructions
 		// always ends with a call, branch, or return
 		// labels can only appear in the beginning
@@ -418,6 +435,8 @@ namespace L3::program {
 		Vec<Uptr<Instruction>> &get_raw_instructions() { return this->raw_instructions; }
 		const Vec<Uptr<Instruction>> &get_raw_instructions() const { return this->raw_instructions; }
 		const Vec<BasicBlock *> &get_succ_blocks() const { return this->succ_blocks; }
+		void generate_computation_trees(); // TODO; also generates the gen set since that can be found locally
+		bool update_in_out_sets(); // TODO; returns whether anything changed
 
 		class Builder {
 			Uptr<BasicBlock> fetus;

@@ -2,6 +2,7 @@
 #include "parser.h"
 #include "program.h"
 #include "tiles.h"
+#include "analyze_trees.h"
 #include "code_gen.h"
 #include <string>
 #include <vector>
@@ -70,6 +71,9 @@ int main(
 	);
 
 	if (enable_code_generator) {
+		L3::program::analyze::generate_data_flow(*p);
+		L3::program::analyze::merge_trees(*p);
+
 		std::ofstream o;
 		o.open("prog.L2");
 		L3::code_gen::generate_program_code(*p, o);

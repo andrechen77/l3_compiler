@@ -5,6 +5,8 @@
 #include <iostream>
 
 namespace L3::code_gen::tiles {
+	// TODO add more tiles for CISC instructions
+
 	using namespace L3::program;
 
 	/*
@@ -75,6 +77,16 @@ namespace L3::code_gen::tiles {
 				}
 			}
 		};
+
+		// Matches: anything its child CTR matches, if the captures at the two specified indices are different
+		// Captures: nothing
+		template<typename CtrOutput, int index0, int index1, typename ChildCtr>
+		struct DistinctionCtr {
+			static bool match(ComputationTree &target, CtrOutput &o) {
+				if (!ChildCtr::match(target, o)) return false;
+				return std::get<index0>(o) == std::get<index1>(o);
+			}
+		}
 
 		// Matches: A Variable * variant of ComputationTree
 		// Captures: the Variable *
