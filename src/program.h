@@ -401,6 +401,7 @@ namespace L3::program {
 		public:
 
 		ComputationTreeBox(const Instruction &inst);
+		const Uptr<ComputationNode> &get_tree() const { return this->root_nullable; }
 		const Set<Variable *> &get_variables_read() const { return this->vars_read; }
 		const Set<Variable *> &get_variables_written() const { return this->vars_written; }
 
@@ -446,6 +447,7 @@ namespace L3::program {
 		const Vec<BasicBlock *> &get_succ_blocks() const { return this->succ_blocks; }
 		void generate_computation_trees(); // also generates the gen and kill sets
 		bool update_in_out_sets();
+		std::string to_string() const;
 
 		class Builder {
 			Uptr<BasicBlock> fetus;

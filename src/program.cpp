@@ -397,25 +397,23 @@ namespace L3::program {
 	}
 
 	BasicBlock::BasicBlock() {} // default-initialize everything
-	void BasicBlock::generate_computation_trees() {
-		// generate the computation trees
-		for (const Uptr<Instruction> &inst : this->raw_instructions) {
-			this->tree_boxes.push_back(mkuptr<ComputationTreeBox>(*inst));
+	// implementations for BasicBlock::generate_computation_trees and
+	// update_in_out_sets are in analyze_trees.cpp
+	std::string BasicBlock::to_string() const {
+		std::string result = "-----\n";
+		result += "in: ";
+		for (Variable *var : this->var_liveness.in_set) {
+			result += var->get_name() + ", ";
 		}
-
-		// generate the gen and kill set
-		// the algorithm starts at the end of the block
-		VarLiveness &l = this->var_liveness;
-		for (auto it = this->tree_boxes.rbegin(); it != this->tree_boxes.rend(); ++it) {
-			l.kill_set += (*it)->get_variables_written();
-			l.gen_set -= (*it)->get_variables_written();
-			l.gen_set += (*it)->get_variables_read();
+		result += "\nout: ";
+		for (Variable *var : this->var_liveness.out_set) {
+			result += var->get_name() + ", ";
 		}
-	}
-	bool BasicBlock::update_in_out_sets() {
-		// TODO; returns whether anything changed
-		std::cerr << "updating in/out sets...\n";
-		return false;
+		result += "\ntrees:\n";
+		for (const Uptr<ComputationTreeBox> &tree_box : this->tree_boxes) {
+			result += tree_box->get_tree()->to_string() + "\n";
+		}
+		return result;
 	}
 	BasicBlock::Builder::Builder() :
 		fetus { Uptr<BasicBlock>(new BasicBlock()) },
@@ -498,12 +496,7 @@ namespace L3::program {
 		}
 		result += ") {\n";
 		for (const Uptr<BasicBlock> &block : this->blocks) {
-			result += "\t-----\n";
-			for (const Uptr<Instruction> &inst : block->get_raw_instructions()) {
-				result += "\t" + inst->to_string() + "\n";
-					// + " || " + program::to_string(inst->to_computation_tree()) + "\n";
-			}
-			// result += "\t>\n";
+			result += block->to_string();
 		}
 		result += "}";
 		return result;
