@@ -46,6 +46,8 @@ namespace L3::program {
 		Uptr<ComputationNode>
 	>;
 
+	Set<Variable *> pick_variables(ComputationTree &cmpTree);
+
 	// interface
 	class Expr {
 		public:
@@ -311,6 +313,8 @@ namespace L3::program {
 
 		ComputationNode(Opt<Variable *> destination) : destination { destination } {}
 		virtual std::string to_string() const;
+		virtual Set<Variable*> get_var_source();
+		virtual Set<Variable*> get_var_dest();
 	};
 
 	struct NoOpComputation : ComputationNode {
@@ -326,6 +330,7 @@ namespace L3::program {
 			ComputationNode(destination), source { mv(source) }
 		{}
 		virtual std::string to_string() const override;
+		virtual Set<Variable*> get_var_source() override;
 	};
 
 	struct BinaryComputation : ComputationNode {
@@ -337,6 +342,7 @@ namespace L3::program {
 			ComputationNode(destination), op {op}, lhs { mv(lhs) }, rhs { mv(rhs) }
 		{}
 		virtual std::string to_string() const override;
+		virtual Set<Variable*> get_var_source() override;
 	};
 
 	struct CallComputation : ComputationNode {
@@ -348,6 +354,7 @@ namespace L3::program {
 			ComputationNode(destination), function { mv(function) }, arguments { mv(arguments) }
 		{}
 		virtual std::string to_string() const override;
+		virtual Set<Variable*> get_var_source() override;
 	};
 
 	struct LoadComputation : ComputationNode {
@@ -357,6 +364,7 @@ namespace L3::program {
 			ComputationNode(destination), address { mv(address) }
 		{}
 		virtual std::string to_string() const override;
+		virtual Set<Variable*> get_var_source() override;
 	};
 
 	struct StoreComputation : ComputationNode {
@@ -368,6 +376,7 @@ namespace L3::program {
 			ComputationNode({}), address { mv(address) }, value { mv(value) }
 		{}
 		virtual std::string to_string() const override;
+		virtual Set<Variable*> get_var_source() override;
 	};
 
 	struct BranchComputation : ComputationNode {
@@ -379,6 +388,7 @@ namespace L3::program {
 			ComputationNode({}), jmp_dest { jmp_dest }, condition { mv(condition) }
 		{}
 		virtual std::string to_string() const override;
+		virtual Set<Variable *> get_var_source() override;
 	};
 
 	struct ReturnComputation : ComputationNode {
@@ -388,6 +398,7 @@ namespace L3::program {
 		ReturnComputation() : ComputationNode({}), value {} {}
 		ReturnComputation(ComputationTree value) : ComputationNode({}), value { mv(value) } {}
 		virtual std::string to_string() const override;
+		virtual Set<Variable *> get_var_source() override;
 	};
 
 	// meant to hold a computation tree as well as all the information that comes

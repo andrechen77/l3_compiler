@@ -3,10 +3,23 @@
 #include "utils.h"
 #include <assert.h>
 #include <map>
+#include <optional>
 #include <algorithm>
 
 namespace L3::program {
 	using namespace std_alias;
+
+	Set<Variable *> pick_variables(ComputationTree &cmpTree){
+		if (Variable **var = std::get_if<Variable *>(&cmpTree)) {
+			return {*var};
+		}
+		else if (Uptr<ComputationNode> *var = std::get_if<Uptr<ComputationNode>>(&cmpTree)){
+			return {(*var)->get_var_source()};
+		}
+		else {
+			return {};
+		}
+	}
 
 	template<> std::string ItemRef<Variable>::to_string() const {
 		std::string result = "%" + this->get_ref_name();
@@ -316,6 +329,16 @@ namespace L3::program {
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") {}";
 	}
+	Set<Variable*> ComputationNode::get_var_source() {
+		std::cerr << "called computationNOde default get_var_source: bad" << std::endl;
+		return {};
+	}
+	Set<Variable *> ComputationNode::get_var_dest() {
+		if (this->destination.has_value()){
+			return Set<Variable *>{*this->destination};
+		}
+		return {};
+	}
 	std::string NoOpComputation::to_string() const {
 		return "CT NoOp ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
@@ -328,6 +351,9 @@ namespace L3::program {
 			+ program::to_string(source)
 			+ " }";
 	}
+	Set<Variable*> MoveComputation::get_var_source(){
+		return pick_variables(this->source);
+	}
 	std::string BinaryComputation::to_string() const {
 		return "CT Binary ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
@@ -338,6 +364,12 @@ namespace L3::program {
 			+ ", rhs: "
 			+ program::to_string(this->rhs)
 			+ " }";
+	}
+	Set<Variable *> BinaryComputation::get_var_source(){
+		Set<Variable *> sol;
+		sol.merge(pick_variables(this->lhs));
+		sol.merge(pick_variables(this->rhs));
+		return sol;
 	}
 	std::string CallComputation::to_string() const {
 		std::string result = "CT Call ("
@@ -351,12 +383,22 @@ namespace L3::program {
 		result += "] }";
 		return result;
 	}
+	Set<Variable*> CallComputation::get_var_source(){
+		Set<Variable *> sol;
+		for (ComputationTree &cmptree: arguments) {
+			sol.merge(pick_variables(cmptree));
+		}
+		return sol;
+	}
 	std::string LoadComputation::to_string() const {
 		return "CT Load ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { address: "
 			+ program::to_string(this->address)
 			+ " }";
+	}
+	Set<Variable*> LoadComputation::get_var_source(){
+		return pick_variables(this->address);
 	}
 	std::string StoreComputation::to_string() const {
 		return "CT Store ("
@@ -367,6 +409,12 @@ namespace L3::program {
 			+ program::to_string(this->value)
 			+ " }";
 	}
+	Set<Variable*> StoreComputation::get_var_source() {
+		Set<Variable *> sol;
+		sol.merge(pick_variables(this->address));
+		sol.merge(pick_variables(this->value));
+		return sol;
+	}
 	std::string BranchComputation::to_string() const {
 		return "CT Branch ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
@@ -376,6 +424,12 @@ namespace L3::program {
 			+ utils::to_string<ComputationTree, program::to_string>(this->condition)
 			+ " }";
 	}
+	Set<Variable*> BranchComputation::get_var_source() {
+		if (this->condition.has_value()){
+			return pick_variables(*this->condition);
+		}
+		return Set<Variable *>();
+	}
 	std::string ReturnComputation::to_string() const {
 		return "CT Return ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
@@ -383,13 +437,17 @@ namespace L3::program {
 			+ utils::to_string<ComputationTree, program::to_string>(this->value)
 			+ " }";
 	}
+	Set<Variable *> ReturnComputation::get_var_source(){
+		if (this->value.has_value()){
+			return pick_variables(*this->value);
+		}
+		return Set<Variable *>();
+	}
 
-	ComputationTreeBox::ComputationTreeBox(const Instruction &inst) :
-		root_nullable { inst.to_computation_tree() },
-		vars_read {},
-		vars_written {}
-	{
-		// TODO calculate vars_read and vars_written
+	ComputationTreeBox::ComputationTreeBox(const Instruction &inst) {
+		this->root_nullable = inst.to_computation_tree();
+		this->vars_read = this->root_nullable->get_var_source();
+		this->vars_written = this->root_nullable->get_var_dest();
 	}
 	void ComputationTreeBox::merge(Variable *var, ComputationTreeBox &other) {
 		// TODO
