@@ -4,7 +4,9 @@
 #include "utils.h"
 #include <iostream>
 
-namespace L3::program::tiles {
+namespace L3::code_gen::tiles {
+	using namespace L3::program;
+
 	/*
 	struct MyTile {
 		using Ctr = DestCtr<Out,
@@ -350,7 +352,7 @@ namespace L3::program::tiles {
 
 	namespace tile_patterns {
 		using namespace rules;
-		using namespace L3::code_gen::target_arch; // TODO just fix the namespaces
+		using L3::code_gen::target_arch::to_l2_expr;
 
 		// interface
 		struct TilePattern {
@@ -680,7 +682,7 @@ namespace L3::program::tiles {
 
 				std::string result;
 				for (int i = 0; i < args.size(); ++i) {
-					result += get_argument_prepping_instruction(to_l2_expr(*args[i]), i) + "\n";
+					result += target_arch::get_argument_prepping_instruction(to_l2_expr(*args[i]), i) + "\n";
 				}
 
 				Function *const *maybe_fun_ptr = std::get_if<Function *>(callee);

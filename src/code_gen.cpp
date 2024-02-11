@@ -15,7 +15,7 @@ namespace L3::code_gen {
 		return result;
 	}
 
-	void generate_l3_function_code(const L3::program::L3Function &l3_function, std::ostream &o) {
+	void generate_l3_function_code(const L3Function &l3_function, std::ostream &o) {
 		// function header
 		o << "\t(@" << l3_function.get_name()
 			<< " " << l3_function.get_parameter_vars().size() << "\n";
