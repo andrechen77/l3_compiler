@@ -39,8 +39,8 @@ namespace L3::code_gen {
 				o << "\t\t:" << block->get_name() << "\n";
 			}
 			Vec<Uptr<ComputationTree>> computation_trees = calculate_computation_trees(*block);
-			Vec<Uptr<tiles::TilePattern>> tiles = tiles::tile_trees(computation_trees);
-			for (const Uptr<tiles::TilePattern> &tile : tiles) {
+			Vec<Uptr<tiles::Tile>> tiles = tiles::tile_trees(computation_trees);
+			for (const Uptr<tiles::Tile> &tile : tiles) {
 				o << tile->to_l2_instructions() << "\n";
 			}
 		}
