@@ -314,7 +314,8 @@ namespace L3::program {
 		ComputationNode(Opt<Variable *> destination) : destination { destination } {}
 		virtual std::string to_string() const;
 		virtual Set<Variable*> get_var_source();
-		virtual Set<Variable*> get_var_dest();
+		virtual Opt<Variable*> get_var_dest();
+		virtual Opt<ComputationTree*> merge(Variable *target);
 	};
 
 	struct NoOpComputation : ComputationNode {
@@ -326,11 +327,12 @@ namespace L3::program {
 	struct MoveComputation : ComputationNode {
 		ComputationTree source;
 
-		MoveComputation(Opt<Variable *> destination, ComputationTree source) :
+		MoveComputation(Opt<Variable *> destination) :
 			ComputationNode(destination), source { mv(source) }
 		{}
 		virtual std::string to_string() const override;
 		virtual Set<Variable*> get_var_source() override;
+		virtual Opt<ComputationTree*> merge(Variable *target);
 	};
 
 	struct BinaryComputation : ComputationNode {
@@ -343,6 +345,7 @@ namespace L3::program {
 		{}
 		virtual std::string to_string() const override;
 		virtual Set<Variable*> get_var_source() override;
+		virtual Opt<ComputationTree*> merge(Variable *target);
 	};
 
 	struct CallComputation : ComputationNode {
@@ -355,6 +358,8 @@ namespace L3::program {
 		{}
 		virtual std::string to_string() const override;
 		virtual Set<Variable*> get_var_source() override;
+		virtual Opt<ComputationTree*> merge(Variable *target);
+
 	};
 
 	struct LoadComputation : ComputationNode {
@@ -365,6 +370,7 @@ namespace L3::program {
 		{}
 		virtual std::string to_string() const override;
 		virtual Set<Variable*> get_var_source() override;
+		virtual Opt<ComputationTree*> merge(Variable *target);
 	};
 
 	struct StoreComputation : ComputationNode {
@@ -377,6 +383,7 @@ namespace L3::program {
 		{}
 		virtual std::string to_string() const override;
 		virtual Set<Variable*> get_var_source() override;
+		virtual Opt<ComputationTree *> merge(Variable* target) override;
 	};
 
 	struct BranchComputation : ComputationNode {
@@ -389,6 +396,7 @@ namespace L3::program {
 		{}
 		virtual std::string to_string() const override;
 		virtual Set<Variable *> get_var_source() override;
+		virtual Opt<ComputationTree*> merge(Variable *target);
 	};
 
 	struct ReturnComputation : ComputationNode {
@@ -399,6 +407,7 @@ namespace L3::program {
 		ReturnComputation(ComputationTree value) : ComputationNode({}), value { mv(value) } {}
 		virtual std::string to_string() const override;
 		virtual Set<Variable *> get_var_source() override;
+		virtual Opt<ComputationTree*> merge(Variable *target);
 	};
 
 	// meant to hold a computation tree as well as all the information that comes
@@ -407,13 +416,13 @@ namespace L3::program {
 	class ComputationTreeBox {
 		Uptr<ComputationNode> root_nullable; // null means this box has been stolen from in a merge
 		Set<Variable *> vars_read;
-		Set<Variable *> vars_written;
+		Opt<Variable *> var_written;
 
 		public:
 
 		ComputationTreeBox(const Instruction &inst);
 		const Set<Variable *> &get_variables_read() const { return this->vars_read; }
-		const Set<Variable *> &get_variables_written() const { return this->vars_written; }
+		const Opt<Variable *> &get_variables_written() const { return this->var_written; }
 
 		// steals from the other ComputationTreeBox and merges on the specified
 		// variable; fails if the other box doesn't write to the same variable

@@ -42,7 +42,7 @@ namespace L3::program::analyze {
 	// reads from that variable and could merge on it. if you encounter
 	// an eligible candidate that writes to a variable, then merge those trees
 	void merge_trees(BasicBlock &block) {
-
+		
 	}
 
 	// TODO

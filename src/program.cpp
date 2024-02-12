@@ -333,10 +333,10 @@ namespace L3::program {
 		std::cerr << "called computationNOde default get_var_source: bad" << std::endl;
 		return {};
 	}
-	Set<Variable *> ComputationNode::get_var_dest() {
-		if (this->destination.has_value()){
-			return Set<Variable *>{*this->destination};
-		}
+	Opt<Variable *> ComputationNode::get_var_dest() {
+		return this->destination;
+	}
+	Opt<ComputationTree *> merge(Variable *target) {
 		return {};
 	}
 	std::string NoOpComputation::to_string() const {
@@ -354,6 +354,17 @@ namespace L3::program {
 	Set<Variable*> MoveComputation::get_var_source(){
 		return pick_variables(this->source);
 	}
+	Opt<ComputationTree*> MoveComputation::merge(Variable *target) {
+		if (Variable **var = std::get_if<Variable *>(&this->source)) {
+			if (*var == target){
+				return &this->source;
+			}
+		}
+		else if (Uptr<ComputationNode> *var = std::get_if<Uptr<ComputationNode>>(&this->source)) {
+			return (*var)->merge(target);
+		}
+		return {};
+	}
 	std::string BinaryComputation::to_string() const {
 		return "CT Binary ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
@@ -370,6 +381,40 @@ namespace L3::program {
 		sol.merge(pick_variables(this->lhs));
 		sol.merge(pick_variables(this->rhs));
 		return sol;
+	}
+	Opt<ComputationTree*> BinaryComputation::merge(Variable *target){
+		Opt<ComputationTree *> left_sol = {};
+		if (Variable **var_lhs = std::get_if<Variable *>(&this->lhs)) {
+			if (*var_lhs == target){
+				left_sol = &this->lhs;
+			}
+		}
+		else if (Uptr<ComputationNode> *var_lhs = std::get_if<Uptr<ComputationNode>>(&this->lhs)) {
+			left_sol = (*var_lhs)->merge(target);
+		}
+		// if sol is an int, then we have detected two or more variables
+		// and therefore cancel
+		if (left_sol.has_value()){
+			if (int64_t *var_sol = std::get_if<int64_t>(left_sol.value())){
+				return left_sol;
+			}
+		}
+
+		// calculatee right_side
+		Opt<ComputationTree *> right_sol = {};
+		if (Variable **var_rhs = std::get_if<Variable *>(&this->rhs)) {
+			if (*var_rhs == target){
+				right_sol = &this->rhs;
+			}
+		}
+		else if (Uptr<ComputationNode> *var_rhs = std::get_if<Uptr<ComputationNode>>(&this->rhs)) {
+			right_sol = (*var_rhs)->merge(target);
+		}
+
+		if (left_sol.has_value() && right_sol.has_value()) {
+			ComputationTree temp = -1;
+			return &temp;
+		}
 	}
 	std::string CallComputation::to_string() const {
 		std::string result = "CT Call ("
@@ -390,6 +435,32 @@ namespace L3::program {
 		}
 		return sol;
 	}
+	Opt<ComputationTree*> CallComputation::merge(Variable *target) {
+		Opt<ComputationTree *> sol = {};
+		for (ComputationTree &cmptree: this->arguments) {
+			if (Variable **var = std::get_if<Variable*>(&cmptree)) {
+				if(*var == target){
+					if(sol.has_value()){
+						ComputationTree temp = -1;
+						return &temp;
+					}
+					sol = &cmptree;
+				}
+			}
+			else if (Uptr<ComputationNode> *var = std::get_if<Uptr<ComputationNode>>(&cmptree)) {
+				Opt<ComputationTree *> temp = (*var)->merge(target);
+				if (temp.has_value()) {
+					if (sol.has_value()){
+						return temp.value();
+					}
+					else {
+						sol = temp;
+					}
+				}
+			}
+		}
+		return sol;
+	}
 	std::string LoadComputation::to_string() const {
 		return "CT Load ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
@@ -399,6 +470,17 @@ namespace L3::program {
 	}
 	Set<Variable*> LoadComputation::get_var_source(){
 		return pick_variables(this->address);
+	}
+	Opt<ComputationTree *> LoadComputation::merge(Variable *target) {
+		if (Variable **var = std::get_if<Variable *>(&this->address)) {
+			if (*var == target){
+				return &this->address;
+			}
+		}
+		else if (Uptr<ComputationNode> *var = std::get_if<Uptr<ComputationNode>>(&this->address)) {
+			return (*var)->merge(target);
+		}
+		return {};
 	}
 	std::string StoreComputation::to_string() const {
 		return "CT Store ("
@@ -415,6 +497,44 @@ namespace L3::program {
 		sol.merge(pick_variables(this->value));
 		return sol;
 	}
+	Opt<ComputationTree *> StoreComputation::merge(Variable *target) {
+		Opt<ComputationTree *> address_sol = {};
+		if (Variable **var = std::get_if<Variable *>(&this->address)) {
+			if (*var == target){
+				address_sol = &this->address;
+			}
+		}
+		else if (Uptr<ComputationNode> *var = std::get_if<Uptr<ComputationNode>>(&this->address)) {
+			address_sol = (*var)->merge(target);
+		}
+		// if (left_sol.has_value()){
+		// 	if (int64_t *var_sol = std::get_if<int64_t>(left_sol.value())){
+		// 		return left_sol;
+		// 	}
+		// }
+		if (address_sol.has_value()){
+			if (int64_t *ptr = std::get_if<int64_t>(address_sol.value())){
+				ComputationTree temp = -1;
+				return &temp;
+			}
+		}
+
+		Opt<ComputationTree *> value_sol = {};
+		if (Variable **var = std::get_if<Variable *>(&this->value)) {
+			if (*var == target){
+				value_sol = &this->value;
+			}
+		}
+		else if(Uptr<ComputationNode> *var = std::get_if<Uptr<ComputationNode>>(&this->value)) {
+			value_sol = (*var)->merge(target);
+		}
+
+		if(value_sol.has_value() && address_sol.has_value()) {
+			ComputationTree temp = -1;
+			return &temp;
+		}
+		return {};
+	}
 	std::string BranchComputation::to_string() const {
 		return "CT Branch ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
@@ -430,6 +550,19 @@ namespace L3::program {
 		}
 		return Set<Variable *>();
 	}
+	Opt<ComputationTree *> BranchComputation::merge(Variable *target) {
+		if (this->condition.has_value()){
+			if (Variable **var = std::get_if<Variable *>(&*this->condition)){
+				if (*var == target) {
+					return &*this->condition;
+				}
+			}
+			else if (Uptr<ComputationNode> *var = std::get_if<Uptr<ComputationNode>>(&*this->condition)){
+				return (*var)->merge(target);
+			}
+		}
+		return {};
+	}
 	std::string ReturnComputation::to_string() const {
 		return "CT Return ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
@@ -443,15 +576,43 @@ namespace L3::program {
 		}
 		return Set<Variable *>();
 	}
+	Opt<ComputationTree *> ReturnComputation::merge(Variable *target) {
+		if (this->value.has_value()){
+			if(Variable **var = std::get_if<Variable *>(&*this->value)) {
+				if (*var == target) {
+					return &*this->value;
+				}
+			}
+			else if (Uptr<ComputationNode> *var = std::get_if<Uptr<ComputationNode>>(&*this->value)){
+				return (*var)->merge(target);
+			}
+		}
+		return {};
+	}
 
 	ComputationTreeBox::ComputationTreeBox(const Instruction &inst) {
 		this->root_nullable = inst.to_computation_tree();
 		this->vars_read = this->root_nullable->get_var_source();
-		this->vars_written = this->root_nullable->get_var_dest();
+		this->var_written = this->root_nullable->get_var_dest();
 	}
 	void ComputationTreeBox::merge(Variable *var, ComputationTreeBox &other) {
-		// TODO
-		std::cout << "unimplemented: doing a single merge\n";
+		if (other.var_written.has_value()) {
+			if (var != *other.var_written){
+				return;
+			}
+		}
+		Opt<ComputationTree *> result = this->root_nullable->merge(var);
+		if (result.has_value()) {
+			if(int64_t *var = std::get_if<int64_t>(result.value())){
+				return;
+			}
+			else{
+				ComputationTree *position = result.value();
+				*position = std::move(other.root_nullable);
+				other.root_nullable = nullptr;
+			}
+		}
+		return;
 	}
 
 	BasicBlock::BasicBlock() {} // default-initialize everything
@@ -465,8 +626,8 @@ namespace L3::program {
 		// the algorithm starts at the end of the block
 		VarLiveness &l = this->var_liveness;
 		for (auto it = this->tree_boxes.rbegin(); it != this->tree_boxes.rend(); ++it) {
-			l.kill_set += (*it)->get_variables_written();
-			l.gen_set -= (*it)->get_variables_written();
+			l.kill_set.insert((*it)->get_variables_written().value());
+			l.gen_set.erase((*it)->get_variables_written().value());
 			l.gen_set += (*it)->get_variables_read();
 		}
 	}
