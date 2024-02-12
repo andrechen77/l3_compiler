@@ -3,6 +3,7 @@
 #include "target_arch.h"
 #include "utils.h"
 #include <iostream>
+#include <algorithm>
 
 namespace L3::code_gen::tiles {
 	// TODO add more tiles for CISC instructions
@@ -355,22 +356,15 @@ namespace L3::code_gen::tiles {
 		};
 	}
 
-	// A TilePattern is a struct with:
+	// To be used for matching, a TilePattern subclass must have:
 	// - member type Captures describing the capture variables of the tile
-	// - member type Rule with Rule::match(ComputationTree &) works
-	// - static function std::string to_l2_function(const O &o)
+	// - member type Rule where Rule::match(ComputationTree &) works
 	// - static member int cost
 	// - static member int munch
 
 	namespace tile_patterns {
 		using namespace rules;
 		using L3::code_gen::target_arch::to_l2_expr;
-
-		// interface
-		struct TilePattern {
-			virtual std::string to_l2_instructions() const = 0;
-			virtual Vec<ComputationTree *> get_unmatched() const = 0;
-		};
 
 		struct NoOp : TilePattern {
 			using Captures = std::tuple<>;
@@ -740,7 +734,7 @@ namespace L3::code_gen::tiles {
 	}
 
 	template<typename TP>
-	void attempt_tile_match(ComputationTree &tree, Opt<Uptr<tp::TilePattern>> &out, int best_munch, int cost) {
+	void attempt_tile_match(ComputationTree &tree, Opt<Uptr<TilePattern>> &out, int best_munch, int cost) {
 		if (TP::munch > best_munch || (TP::munch == best_munch && TP::cost < cost)) {
 			Opt<Uptr<TP>> result = attempt_tile_match<TP>(tree);
 			if (result) {
@@ -749,12 +743,12 @@ namespace L3::code_gen::tiles {
 		}
 	}
 	template<typename... TPs>
-	void attempt_tile_matches(ComputationTree &tree, Opt<Uptr<tp::TilePattern>> &out, int best_munch, int cost) {
+	void attempt_tile_matches(ComputationTree &tree, Opt<Uptr<TilePattern>> &out, int best_munch, int cost) {
 		(attempt_tile_match<TPs>(tree, out, best_munch, cost), ...);
 	}
 
-	Opt<Uptr<tp::TilePattern>> find_best_tile(ComputationTree &tree) {
-		Opt<Uptr<tp::TilePattern>> best_match;
+	Opt<Uptr<TilePattern>> find_best_tile(ComputationTree &tree) {
+		Opt<Uptr<TilePattern>> best_match;
 		attempt_tile_matches<
 			tp::NoOp,
 			tp::PureAssignment,
@@ -771,24 +765,10 @@ namespace L3::code_gen::tiles {
 		return best_match;
 	}
 
-	void tile_trees(Vec<Uptr<ComputationTree>> &trees, std::ostream &o) {
-		// TODO actually tile the trees instead of this placeholder
-		/* for (const Uptr<ComputationTree> &tree : trees) {
-			o << "\t\t - " << program::to_string(*tree) << "\n";
-
-			Opt<Uptr<tp::TilePattern>> best_match = find_best_tile(*tree);
-			if (best_match) {
-				o << (*best_match)->to_l2_instructions() << "\n";
-			} else {
-				o << "no match for this one \n";
-			}
-		}
-		std::cerr << "okay real algorithm now \n"; */
-
-		// algorithm starts here
+	Vec<Uptr<TilePattern>> tile_trees(Vec<Uptr<ComputationTree>> &trees) {
 		// build a stack to hold pointers to the currently untiled trees.
 		// the top of the stack is for trees that must be executed later
-		Vec<Uptr<tp::TilePattern>> tiles; // stored in REVERSE order of execution
+		Vec<Uptr<TilePattern>> tiles; // stored in REVERSE order of execution
 		Vec<ComputationTree *> untiled_trees;
 		for (const Uptr<ComputationTree> &tree : trees) {
 			untiled_trees.push_back(tree.get());
@@ -797,7 +777,7 @@ namespace L3::code_gen::tiles {
 			// try to tile the top tree
 			ComputationTree *top_tree = untiled_trees.back();
 			untiled_trees.pop_back();
-			Opt<Uptr<tp::TilePattern>> best_match = find_best_tile(*top_tree);
+			Opt<Uptr<TilePattern>> best_match = find_best_tile(*top_tree);
 			if (!best_match) {
 				std::cerr << "Couldn't find a tile for this tree! " << program::to_string(*top_tree) << "\n";
 				exit(1);
@@ -807,8 +787,7 @@ namespace L3::code_gen::tiles {
 			}
 			tiles.push_back(mv(*best_match));
 		}
-		for (auto it = tiles.rbegin(); it != tiles.rend(); ++it) {
-			o << (*it)->to_l2_instructions() << "\n";
-		}
+		std::reverse(tiles.begin(), tiles.end()); // now stored in FORWARD order
+		return tiles;
 	}
 }
