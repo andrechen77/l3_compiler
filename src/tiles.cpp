@@ -142,7 +142,7 @@ namespace L3::code_gen::tiles {
 
 			virtual Vec<std::string> to_l2_instructions() const override {
 				return {
-					to_l2_expr(this->dest) + " <- " + to_l2_expr(this->source) + "\n"
+					to_l2_expr(this->dest) + " <- " + to_l2_expr(this->source)
 				};
 			}
 			virtual Vec<L3::program::ComputationTree *> get_unmatched() const override {
