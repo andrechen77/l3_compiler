@@ -140,8 +140,10 @@ namespace L3::code_gen::tiles {
 			static const int munch = 1;
 			static const int cost = 1;
 
-			virtual std::string to_l2_instructions() const override {
-				return to_l2_expr(this->dest) + " <- " + to_l2_expr(this->source) + "\n";
+			virtual Vec<std::string> to_l2_instructions() const override {
+				return {
+					to_l2_expr(this->dest) + " <- " + to_l2_expr(this->source) + "\n"
+				};
 			}
 			virtual Vec<L3::program::ComputationTree *> get_unmatched() const override {
 				return {};

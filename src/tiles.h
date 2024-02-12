@@ -9,7 +9,7 @@ namespace L3::code_gen::tiles {
 
 	// interface
 	struct Tile {
-		virtual std::string to_l2_instructions() const = 0;
+		virtual Vec<std::string> to_l2_instructions() const = 0;
 		virtual Vec<L3::program::ComputationTree *> get_unmatched() const = 0;
 	};
 
