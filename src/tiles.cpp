@@ -163,24 +163,27 @@ namespace L3::code_gen::tiles {
 	}
 
 	template<typename TP>
-	void attempt_tile_match(const ComputationTree &tree, Opt<Uptr<Tile>> &out, int best_munch, int cost) {
-		if (TP::munch > best_munch || (TP::munch == best_munch && TP::cost < cost)) {
+	void attempt_tile_match(const ComputationTree &tree, Opt<Uptr<Tile>> &out, int &best_munch, int &best_cost) {
+		if (TP::munch > best_munch || (TP::munch == best_munch && TP::cost <= best_cost)) {
 			Opt<Uptr<TP>> result = attempt_tile_match<TP>(tree);
 			if (result) {
 				out = mv(*result);
+				best_munch = TP::munch;
+				best_cost = TP::cost;
 			}
 		}
 	}
 	template<typename... TPs>
-	void attempt_tile_matches(const ComputationTree &tree, Opt<Uptr<Tile>> &out, int best_munch, int cost) {
-		(attempt_tile_match<TPs>(tree, out, best_munch, cost), ...);
+	void attempt_tile_matches(const ComputationTree &tree, Opt<Uptr<Tile>> &out, int &best_munch, int &best_cost) {
+		(attempt_tile_match<TPs>(tree, out, best_munch, best_cost), ...);
 	}
 
 	Opt<Uptr<Tile>> find_best_tile(const ComputationTree &tree) {
 		Opt<Uptr<Tile>> best_match;
+		int best_munch = 0;
+		int best_cost = 0;
 		attempt_tile_matches<
-			tp::MyTile
-		>(tree, best_match, 0, 0);
+		>(tree, best_match, best_munch, best_cost);
 		return best_match;
 	}
 
