@@ -607,9 +607,16 @@ namespace L3::program {
 				return;
 			}
 			else{
+				if (other.root_nullable->has_load) {
+					this->root_nullable->has_load = true;
+				}
+				if (other.root_nullable->has_store) {
+					this->root_nullable->has_store = true;
+				}
 				ComputationTree *position = result.value();
 				*position = std::move(other.root_nullable);
 				other.root_nullable = nullptr;
+				
 			}
 		}
 		return;

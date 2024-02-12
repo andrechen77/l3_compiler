@@ -310,8 +310,14 @@ namespace L3::program {
 	// the leaves as input and ultimately outputting the root.
 	struct ComputationNode {
 		Opt<Variable *> destination; // none if this computation is only for its side effects
+		bool has_load;
+		bool has_store;
 
-		ComputationNode(Opt<Variable *> destination) : destination { destination } {}
+		ComputationNode(Opt<Variable *> destination) : 
+			destination { destination },
+			has_load {false},
+			has_store {false} 
+		{}
 		virtual std::string to_string() const;
 		virtual Set<Variable*> get_var_source();
 		virtual Opt<Variable*> get_var_dest();
@@ -367,7 +373,9 @@ namespace L3::program {
 
 		LoadComputation(Opt<Variable *> destination, ComputationTree address) :
 			ComputationNode(destination), address { mv(address) }
-		{}
+		{
+			has_load = true;
+		}
 		virtual std::string to_string() const override;
 		virtual Set<Variable*> get_var_source() override;
 		virtual Opt<ComputationTree*> merge(Variable *target);
@@ -380,7 +388,9 @@ namespace L3::program {
 		// note that there is no destination argument
 		StoreComputation(ComputationTree address, ComputationTree value) :
 			ComputationNode({}), address { mv(address) }, value { mv(value) }
-		{}
+		{
+			has_store = true;
+		}
 		virtual std::string to_string() const override;
 		virtual Set<Variable*> get_var_source() override;
 		virtual Opt<ComputationTree *> merge(Variable* target) override;
