@@ -7,16 +7,16 @@ namespace L3::program {
 	void BasicBlock::generate_computation_trees() {
 		// generate the computation trees
 		for (const Uptr<Instruction> &inst : this->raw_instructions) {
-			this->tree_boxes.push_back(mkuptr<ComputationTreeBox>(*inst));
+			this->tree_boxes.emplace_back(*inst);
 		}
 
 		// generate the gen and kill set
 		// the algorithm starts at the end of the block
 		VarLiveness &l = this->var_liveness;
 		for (auto it = this->tree_boxes.rbegin(); it != this->tree_boxes.rend(); ++it) {
-			l.kill_set += (*it)->get_variables_written();
-			l.gen_set -= (*it)->get_variables_written();
-			l.gen_set += (*it)->get_variables_read();
+			l.kill_set += it->get_variables_written();
+			l.gen_set -= it->get_variables_written();
+			l.gen_set += it->get_variables_read();
 		}
 
 		// set the initial value of the in and out sets to satisfy the liveness equations
@@ -65,6 +65,101 @@ namespace L3::program {
 
 		return sets_changed;
 	}
+	using Iter = Vec<ComputationTreeBox>::reverse_iterator;
+	// helper function; attempts to merge the ComputationTreeBox at the
+	// child_iter and modifies the passed-in data structures to reflect that the
+	// specified tree has been encountered.
+	void attempt_merge(
+		Iter child_iter,
+		Map<Variable *, Opt<Iter>> &alive_until,
+		Map<Variable *, Iter> &earliest_write,
+		Opt<Iter> &earliest_store
+	) {
+		// attempt to merge on the variable that the tree writes to
+		const Uptr<ComputationNode> &tree = child_iter->get_tree();
+		if (!tree->destination) { return; }
+		Variable *merge_var = *tree->destination;
+
+		// the variable must still be alive after this write
+		auto alive_until_it = alive_until.find(merge_var);
+		if (alive_until_it != alive_until.end()) {
+			// the variable must be alive up until a tree within the same basic
+			// block (i.e. not until the end of the block)
+			if (!alive_until_it->second.has_value()) {
+				Iter parent_iter = *alive_until_it->second;
+
+				// there must be no instructions between the child and parent
+				// that write to the child's read variables
+				bool has_conflict = false;
+				for (Variable *read_var : child_iter->get_variables_read()) {
+					if (auto earliest_write_it = earliest_write.find(read_var);
+						earliest_write_it != earliest_write.end()
+						&& earliest_write_it->second < parent_iter)
+					{
+						has_conflict = true;
+						break;
+					}
+				}
+				if (!has_conflict) {
+					// if the child is a load, there must be no stores between
+					// the child and parent
+					if (!child_iter->has_load()
+						|| !earliest_store
+						|| *earliest_store >= parent_iter)
+					{
+						// finally, we know it's okay to merge
+						parent_iter->merge(merge_var, *child_iter);
+					}
+				}
+			}
+
+			// writing to merge_var kills its lifetime
+			alive_until.erase(alive_until_it);
+		}
+
+		// no matter what, prevent merge_var from being used in another merge
+		// until another tree reads from it
+		earliest_write.insert({ merge_var, child_iter });
+	}
+	void BasicBlock::merge_trees() {
+		// This map stores all the variables alive at the current moment of
+		// iteration, and maps them to a possible T1 merge candidate (that is, a
+		// tree that uses that variable; this is the earliest tree seen so far
+		// in which the variable is used).
+		// - Maps to None (empty optional) if there are no merge
+		// candiates, such as if the Variable is alive until the end of the
+		// basic block.
+		// - Entry does not exist if the variable is not alive
+		Map<Variable *, Opt<Iter>> alive_until;
+
+		// Maps a variable to its earliest write seen so far within this basic block
+		Map<Variable *, Iter> earliest_write;
+
+		// Stores the earliest store tree seen so far within this basic block
+		Opt<Iter> earliest_store;
+
+		for (Iter it = this->tree_boxes.rbegin(); it != this->tree_boxes.rend(); ++it) {
+			if (!it->has_value()) {
+				continue;
+			}
+
+			attempt_merge(it, alive_until, earliest_write, earliest_store);
+
+			// TODO if the current tree is a store, then add it to the earliest store
+			if (it->has_store()) {
+				earliest_store = it;
+			}
+
+			// add the current tree as a merge candidate for the variables it reads
+			for (Variable *var : it->get_variables_read()) {
+				auto alive_until_it = alive_until.find(var);
+				if (alive_until_it == alive_until.end()) {
+					// the variable is dead after this, so add this instruction as as merge candidate
+					alive_until.insert({ var, it });
+				}
+			}
+		}
+	}
 }
 
 namespace L3::program::analyze {
@@ -100,21 +195,11 @@ namespace L3::program::analyze {
 		}
 	}
 
-	// TODO
-	// assumes that data flow has already been generated
-	// merges trees whenever possible
-	// probably the way to do this is to start at the last tree, keeping a
-	// running map of variables to the most recently encountered tree that
-	// reads from that variable and could merge on it. if you encounter
-	// an eligible candidate that writes to a variable, then merge those trees
-	void merge_trees(BasicBlock &block) {
-
-	}
-
-	// TODO
-	// assumes that data flow has already been generated for the program;
-	// merges trees in all the basic blocks
 	void merge_trees(Program &program) {
-		std::cerr << "merging happens here\n";
+		for (Uptr<L3Function> &l3_function : program.get_l3_functions()) {
+			for (Uptr<BasicBlock> &basic_block : l3_function->get_blocks()) {
+				basic_block->merge_trees();
+			}
+		}
 	}
 }

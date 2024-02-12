@@ -401,9 +401,12 @@ namespace L3::program {
 		public:
 
 		ComputationTreeBox(const Instruction &inst);
+		const bool has_value() const { return static_cast<bool>(this->root_nullable); }
 		const Uptr<ComputationNode> &get_tree() const { return this->root_nullable; }
 		const Set<Variable *> &get_variables_read() const { return this->vars_read; }
 		const Set<Variable *> &get_variables_written() const { return this->vars_written; }
+		const bool has_load() const;
+		const bool has_store() const;
 
 		// steals from the other ComputationTreeBox and merges on the specified
 		// variable; fails if the other box doesn't write to the same variable
@@ -413,17 +416,13 @@ namespace L3::program {
 	class BasicBlock {
 		std::string name; // the empty string is treated as a lack of name; we can't just have an optional because ItemRef<BasicBlock> demans that the get_name method always returns a string
 		Vec<Uptr<Instruction>> raw_instructions;
-		Vec<Uptr<ComputationTreeBox>> tree_boxes;
+		Vec<ComputationTreeBox> tree_boxes;
 		struct VarLiveness {
 			Set<Variable *> gen_set;
 			Set<Variable *> kill_set;
 			Set<Variable *> in_set;
 			Set<Variable *> out_set;
 		} var_liveness;
-		// sequential instructions
-		// always ends with a call, branch, or return
-		// labels can only appear in the beginning
-		// there really isn't a purpose for this field since the trees exist
 		Vec<BasicBlock *> succ_blocks;
 
 		explicit BasicBlock();
@@ -447,6 +446,7 @@ namespace L3::program {
 		const Vec<BasicBlock *> &get_succ_blocks() const { return this->succ_blocks; }
 		void generate_computation_trees(); // also generates the gen and kill sets
 		bool update_in_out_sets();
+		void merge_trees();
 		std::string to_string() const;
 
 		class Builder {

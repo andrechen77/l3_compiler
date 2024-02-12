@@ -391,6 +391,13 @@ namespace L3::program {
 	{
 		// TODO calculate vars_read and vars_written
 	}
+	const bool ComputationTreeBox::has_load() const {
+		return false; // TODO
+	}
+	const bool ComputationTreeBox::has_store() const {
+		return false; // TODO
+	}
+
 	void ComputationTreeBox::merge(Variable *var, ComputationTreeBox &other) {
 		// TODO
 		std::cout << "unimplemented: doing a single merge\n";
@@ -410,8 +417,8 @@ namespace L3::program {
 			result += var->get_name() + ", ";
 		}
 		result += "\ntrees:\n";
-		for (const Uptr<ComputationTreeBox> &tree_box : this->tree_boxes) {
-			result += tree_box->get_tree()->to_string() + "\n";
+		for (const ComputationTreeBox &tree_box : this->tree_boxes) {
+			result += tree_box.get_tree()->to_string() + "\n";
 		}
 		return result;
 	}
