@@ -524,7 +524,11 @@ namespace L3::program {
 		}
 
 		ComputationTree *merge_target = merge_targets[0];
-		*merge_target = mv(other.root_nullable);
+		if (MoveComputation *move_other = dynamic_cast<MoveComputation *>(other.root_nullable.get())) {
+			*merge_target = mv(move_other->source);
+		} else {
+			*merge_target = mv(other.root_nullable);
+		}
 		other.root_nullable = nullptr; // just in case
 		return true;
 	}
