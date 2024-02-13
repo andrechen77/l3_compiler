@@ -9,18 +9,6 @@
 namespace L3::program {
 	using namespace std_alias;
 
-	Set<Variable *> pick_variables(ComputationTree &cmpTree){
-		if (Variable **var = std::get_if<Variable *>(&cmpTree)) {
-			return {*var};
-		}
-		else if (Uptr<ComputationNode> *var = std::get_if<Uptr<ComputationNode>>(&cmpTree)){
-			return {(*var)->get_var_source()};
-		}
-		else {
-			return {};
-		}
-	}
-
 	template<> std::string ItemRef<Variable>::to_string() const {
 		std::string result = "%" + this->get_ref_name();
 		if (!this->referent_nullable) {
@@ -31,12 +19,12 @@ namespace L3::program {
 	template<> void ItemRef<Variable>::bind_to_scope(AggregateScope &agg_scope) {
 		agg_scope.variable_scope.add_ref(*this);
 	}
-	template<> ComputationTree ItemRef<Variable>::to_computation_tree() const {
+	template<> Uptr<ComputationNode> ItemRef<Variable>::to_computation_tree() const {
 		if (!this->referent_nullable) {
 			std::cerr << "Error: can't convert free variable name to computation tree.\n";
 			exit(1);
 		}
-		return this->referent_nullable;
+		return mkuptr<VariableCn>(this->referent_nullable);
 	}
 	template<> std::string ItemRef<BasicBlock>::to_string() const {
 		std::string result = ":" + this->get_ref_name();
@@ -48,12 +36,12 @@ namespace L3::program {
 	template<> void ItemRef<BasicBlock>::bind_to_scope(AggregateScope &agg_scope) {
 		agg_scope.label_scope.add_ref(*this);
 	}
-	template<> ComputationTree ItemRef<BasicBlock>::to_computation_tree() const {
+	template<> Uptr<ComputationNode> ItemRef<BasicBlock>::to_computation_tree() const {
 		if (!this->referent_nullable) {
 			std::cerr << "Error: can't convert free label name to computation tree.\n";
 			exit(1);
 		}
-		return this->referent_nullable;
+		return mkuptr<LabelCn>(this->referent_nullable);
 	}
 	template<> std::string ItemRef<L3Function>::to_string() const {
 		std::string result = "@" + this->get_ref_name();
@@ -65,12 +53,12 @@ namespace L3::program {
 	template<> void ItemRef<L3Function>::bind_to_scope(AggregateScope &agg_scope) {
 		agg_scope.l3_function_scope.add_ref(*this);
 	}
-	template<> ComputationTree ItemRef<L3Function>::to_computation_tree() const {
+	template<> Uptr<ComputationNode> ItemRef<L3Function>::to_computation_tree() const {
 		if (!this->referent_nullable) {
 			std::cerr << "Error: can't convert free L3 function name to computation tree.\n";
 			exit(1);
 		}
-		return this->referent_nullable;
+		return mkuptr<FunctionCn>(this->referent_nullable);
 	}
 	template<> std::string ItemRef<ExternalFunction>::to_string() const {
 		std::string result = this->get_ref_name();
@@ -82,12 +70,12 @@ namespace L3::program {
 	template<> void ItemRef<ExternalFunction>::bind_to_scope(AggregateScope &agg_scope) {
 		agg_scope.external_function_scope.add_ref(*this);
 	}
-	template<> ComputationTree ItemRef<ExternalFunction>::to_computation_tree() const {
+	template<> Uptr<ComputationNode> ItemRef<ExternalFunction>::to_computation_tree() const {
 		if (!this->referent_nullable) {
 			std::cerr << "Error: can't convert free external function name to computation tree.\n";
 			exit(1);
 		}
-		return this->referent_nullable;
+		return mkuptr<FunctionCn>(this->referent_nullable);
 	}
 
 	NumberLiteral::NumberLiteral(std::string_view value_str) :
@@ -96,8 +84,8 @@ namespace L3::program {
 	void NumberLiteral::bind_to_scope(AggregateScope &agg_scope) {
 		// empty bc literals make no reference to names
 	}
-	ComputationTree NumberLiteral::to_computation_tree() const {
-		return this->value;
+	Uptr<ComputationNode> NumberLiteral::to_computation_tree() const {
+		return mkuptr<NumberCn>(this->value);
 	}
 	std::string NumberLiteral::to_string() const {
 		return std::to_string(this->value);
@@ -106,8 +94,8 @@ namespace L3::program {
 	void MemoryLocation::bind_to_scope(AggregateScope &agg_scope) {
 		this->base->bind_to_scope(agg_scope);
 	}
-	ComputationTree MemoryLocation::to_computation_tree() const {
-		return mkuptr<LoadComputation>(
+	Uptr<ComputationNode> MemoryLocation::to_computation_tree() const {
+		return mkuptr<LoadCn>(
 			Opt<Variable *>(),
 			this->base->to_computation_tree()
 		);
@@ -143,12 +131,12 @@ namespace L3::program {
 		this->lhs->bind_to_scope(agg_scope);
 		this->rhs->bind_to_scope(agg_scope);
 	}
-	ComputationTree BinaryOperation::to_computation_tree() const {
-		return mkuptr<BinaryComputation>(
+	Uptr<ComputationNode> BinaryOperation::to_computation_tree() const {
+		return mkuptr<BinaryCn>(
 			Opt<Variable *>(),
 			this->op,
-			mv(this->lhs->to_computation_tree()),
-			mv(this->rhs->to_computation_tree())
+			this->lhs->to_computation_tree(),
+			this->rhs->to_computation_tree()
 		);
 	}
 	std::string BinaryOperation::to_string() const {
@@ -163,14 +151,14 @@ namespace L3::program {
 			arg->bind_to_scope(agg_scope);
 		}
 	}
-	ComputationTree FunctionCall::to_computation_tree() const {
-		Vec<ComputationTree> arguments;
+	Uptr<ComputationNode> FunctionCall::to_computation_tree() const {
+		Vec<Uptr<ComputationNode>> arguments;
 		for (const Uptr<Expr> &argument : this->arguments) {
 			arguments.emplace_back(argument->to_computation_tree());
 		}
-		return mkuptr<CallComputation>(
+		return mkuptr<CallCn>(
 			Opt<Variable *>(),
-			mv(this->callee->to_computation_tree()),
+			this->callee->to_computation_tree(),
 			mv(arguments)
 		);
 	}
@@ -190,11 +178,11 @@ namespace L3::program {
 	}
 	Uptr<ComputationNode> InstructionReturn::to_computation_tree() const {
 		if (this->return_value) {
-			return mkuptr<ReturnComputation>(
+			return mkuptr<ReturnCn>(
 				(*this->return_value)->to_computation_tree()
 			);
 		} else {
-			return mkuptr<ReturnComputation>();
+			return mkuptr<ReturnCn>();
 		}
 	}
 	std::string InstructionReturn::to_string() const {
@@ -212,17 +200,17 @@ namespace L3::program {
 		this->source->bind_to_scope(agg_scope);
 	}
 	Uptr<ComputationNode> InstructionAssignment::to_computation_tree() const {
-		ComputationTree tree = this->source->to_computation_tree();
-		// put a destination on the top node; or make a MoveComputation if
-		// the tree is actually a leaf
-		if (Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&tree)) {
+		Uptr<ComputationNode> tree = this->source->to_computation_tree();
+		// put a destination on the top node; or make a MoveCn if
+		// there already is a destination there
+		if (!tree->destination.has_value()) {
 			if (this->maybe_dest) {
-				(*node)->destination = (*this->maybe_dest)->get_referent().value(); // .value() to assert that the destination variable must be bound if it exists
+				tree->destination = (*this->maybe_dest)->get_referent().value(); // .value() to assert that the destination variable must be bound if it exists
 			} // if there is no destination, just leave it blank
-			return mv(*node);
+			return mv(tree);
 		} else {
-			// make a MoveComputation
-			return mkuptr<MoveComputation>(
+			// make a MoveCn
+			return mkuptr<MoveCn>(
 				(*this->maybe_dest)->get_referent().value(), // .value() to assert that there must be a destination; otherwise what's the point (all possibility of side effects was handled in the branch checking if the tree was a ComputationNode)
 				mv(tree)
 			);
@@ -250,7 +238,7 @@ namespace L3::program {
 		this->source->bind_to_scope(agg_scope);
 	}
 	Uptr<ComputationNode> InstructionStore::to_computation_tree() const {
-		return mkuptr<StoreComputation>(
+		return mkuptr<StoreCn>(
 			this->base->to_computation_tree(),
 			this->source->to_computation_tree()
 		);
@@ -269,7 +257,7 @@ namespace L3::program {
 	void InstructionLabel::bind_to_scope(AggregateScope &agg_scope) {}
 	Uptr<ComputationNode> InstructionLabel::to_computation_tree() const {
 		// InstructionLabels don't do anything, so output a no-op tree
-		return mkuptr<NoOpComputation>();
+		return mkuptr<NoOpCn>();
 	}
 	std::string InstructionLabel::to_string() const {
 		return ":" + this->label_name;
@@ -289,12 +277,12 @@ namespace L3::program {
 		};
 	}
 	Uptr<ComputationNode> InstructionBranch::to_computation_tree() const {
-		Opt<ComputationTree> condition_tree;
+		Opt<Uptr<ComputationNode>> condition_tree;
 		if (this->condition) {
 			condition_tree = (*this->condition)->to_computation_tree();
 		}
-		return mkuptr<BranchComputation>(
-			this->label->get_referent().value(),
+		return mkuptr<BranchCn>(
+			this->label->get_referent().value(), // .value() to assert that the value exists
 			mv(condition_tree)
 		);
 	}
@@ -307,31 +295,15 @@ namespace L3::program {
 		return result;
 	}
 
-	Vec<ComputationTree *> get_merge_target(ComputationTree &tree, Variable *target) {
-		if (Variable **var = std::get_if<Variable *>(&tree)) {
-			if (*var == target){
+	Vec<Uptr<ComputationNode> *> get_merge_targets(Uptr<ComputationNode> &tree, Variable *target) {
+		// we must replace a variable node with the potential merge child
+		if (VariableCn *var_node = dynamic_cast<VariableCn *>(tree.get())) {
+			if (var_node->destination == target) {
 				return { &tree };
 			}
-		} else if (Uptr<ComputationNode> *var = std::get_if<Uptr<ComputationNode>>(&tree)) {
-			return (*var)->get_merge_target(target);
 		}
-		return {};
-	}
-	std::string to_string(const ComputationTree &tree) {
-		if (Variable *const *variable = std::get_if<Variable *>(&tree)) {
-			return program::to_string(*variable);
-		} else if (BasicBlock *const *block = std::get_if<BasicBlock *>(&tree)) {
-			return program::to_string(*block);
-		} else if (Function *const *function = std::get_if<Function *>(&tree)) {
-			return program::to_string(*function);
-		} else if (const int64_t *value = std::get_if<int64_t>(&tree)) {
-			return std::to_string(*value);
-		} else if (const Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&tree)) {
-			return (*node)->to_string();
-		} else {
-			std::cout << "Error: I don't know how to convert this type of tree into a string.\n";
-			exit(1);
-		}
+
+		return tree->get_merge_targets(target);
 	}
 
 	std::string ComputationNode::to_string() const {
@@ -339,197 +311,243 @@ namespace L3::program {
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") {}";
 	}
-	Opt<Variable *> ComputationNode::get_var_dest() {
+	Opt<Variable *> ComputationNode::get_var_written() const {
 		return this->destination;
 	}
-	Vec<ComputationTree *> get_merge_target(Variable *target) {
+	Vec<Uptr<ComputationNode> *> get_merge_targets(Variable *target) {
 		return {};
 	}
-	std::string NoOpComputation::to_string() const {
+	std::string NoOpCn::to_string() const {
 		return "CT NoOp ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") {}";
 	}
-	Set<Variable *> NoOpComputation::get_var_source() {
+	Set<Variable *> NoOpCn::get_vars_read() const {
 		return {};
 	}
-	Vec<ComputationTree *> NoOpComputation::get_merge_target(Variable *) {
+	Vec<Uptr<ComputationNode> *> NoOpCn::get_merge_targets(Variable *target) {
 		return {};
 	}
-	std::string MoveComputation::to_string() const {
+	std::string NumberCn::to_string() const {
+		return std::to_string(this->value);
+	}
+	Set<Variable *> NumberCn::get_vars_read() const {
+		return {};
+	}
+	Vec<Uptr<ComputationNode> *> NumberCn::get_merge_targets(Variable *target) {
+		return {};
+	}
+	std::string VariableCn::to_string() const {
+		return program::to_string(*this->destination);
+	}
+	Set<Variable *> VariableCn::get_vars_read() const {
+		return { *this->destination };
+	}
+	Vec<Uptr<ComputationNode> *> VariableCn::get_merge_targets(Variable *target) {
+		// we should never get here because the parent should've already return
+		// the Uptr to this VariableCn as the merge target, not recursing into
+		// VariableCn
+		std::cerr << "Weird: should not have asked VariableCn for its merge targets.\n";
+		exit(1);
+	}
+	std::string FunctionCn::to_string() const {
+		return program::to_string(this->function);
+	}
+	Set<Variable *> FunctionCn::get_vars_read() const {
+		return {};
+	}
+	Vec<Uptr<ComputationNode> *> FunctionCn::get_merge_targets(Variable *target) {
+		return {};
+	}
+	std::string LabelCn::to_string() const {
+		return program::to_string(this->jmp_dest);
+	}
+	Set<Variable *> LabelCn::get_vars_read() const {
+		return {};
+	}
+	Vec<Uptr<ComputationNode> *> LabelCn::get_merge_targets(Variable *target) {
+		return {};
+	}
+	std::string MoveCn::to_string() const {
 		return "CT Move ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { source: "
-			+ program::to_string(source)
+			+ this->source->to_string()
 			+ " }";
 	}
-	Set<Variable*> MoveComputation::get_var_source(){
-		return pick_variables(this->source);
+	Set<Variable*> MoveCn::get_vars_read() const {
+		return this->source->get_vars_read();
 	}
-	Vec<ComputationTree *> MoveComputation::get_merge_target(Variable *target) {
-		return program::get_merge_target(this->source, target);
+	Vec<Uptr<ComputationNode> *> MoveCn::get_merge_targets(Variable *target) {
+		return program::get_merge_targets(this->source, target);
 	}
-	std::string BinaryComputation::to_string() const {
+	std::string BinaryCn::to_string() const {
 		return "CT Binary ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { op: "
 			+ program::to_string(this->op)
 			+ ", lhs: "
-			+ program::to_string(this->lhs)
+			+ this->lhs->to_string()
 			+ ", rhs: "
-			+ program::to_string(this->rhs)
+			+ this->rhs->to_string()
 			+ " }";
 	}
-	Set<Variable *> BinaryComputation::get_var_source(){
-		Set<Variable *> sol;
-		sol.merge(pick_variables(this->lhs));
-		sol.merge(pick_variables(this->rhs));
-		return sol;
+	Set<Variable *> BinaryCn::get_vars_read() const {
+		Set<Variable *> result;
+		result.merge(this->lhs->get_vars_read());
+		result.merge(this->rhs->get_vars_read());
+		return result;
 	}
-	Vec<ComputationTree *> BinaryComputation::get_merge_target(Variable *target){
-		Vec<ComputationTree *> sol = program::get_merge_target(this->lhs, target);
-		Vec<ComputationTree *> rhs_sol = program::get_merge_target(this->rhs, target);
+	Vec<Uptr<ComputationNode> *> BinaryCn::get_merge_targets(Variable *target){
+		Vec<Uptr<ComputationNode> *> sol = program::get_merge_targets(this->lhs, target);
+		Vec<Uptr<ComputationNode> *> rhs_sol = program::get_merge_targets(this->rhs, target);
 		sol += rhs_sol;
 		return sol;
 	}
-	std::string CallComputation::to_string() const {
+	std::string CallCn::to_string() const {
 		std::string result = "CT Call ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
-			+ ") { function: "
-			+ program::to_string(this->function)
+			+ ") { callee: "
+			+ this->callee->to_string()
 			+ ", args: [";
-		for (const ComputationTree &tree : this->arguments) {
-			result += program::to_string(tree) + ", ";
+		for (const Uptr<ComputationNode> &tree : this->arguments) {
+			result += tree->to_string() + ", ";
 		}
 		result += "] }";
 		return result;
 	}
-	Set<Variable*> CallComputation::get_var_source(){
+	Set<Variable *> CallCn::get_vars_read() const {
 		Set<Variable *> sol;
-		for (ComputationTree &cmptree: arguments) {
-			sol.merge(pick_variables(cmptree));
+		for (const Uptr<ComputationNode> &computation_tree: arguments) {
+			sol.merge(computation_tree->get_vars_read());
 		}
 		return sol;
 	}
-	Vec<ComputationTree*> CallComputation::get_merge_target(Variable *target) {
-		Vec<ComputationTree *> sol;
-		for (ComputationTree &cmptree: this->arguments) {
-			sol += program::get_merge_target(cmptree, target);
+	Vec<Uptr<ComputationNode> *> CallCn::get_merge_targets(Variable *target) {
+		Vec<Uptr<ComputationNode> *> sol;
+		for (Uptr<ComputationNode> &computation_tree : this->arguments) {
+			sol += program::get_merge_targets(computation_tree, target);
 		}
 		return sol;
 	}
-	std::string LoadComputation::to_string() const {
+	std::string LoadCn::to_string() const {
 		return "CT Load ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { address: "
-			+ program::to_string(this->address)
+			+ this->address->to_string()
 			+ " }";
 	}
-	Set<Variable*> LoadComputation::get_var_source(){
-		return pick_variables(this->address);
+	Set<Variable *> LoadCn::get_vars_read() const {
+		return this->address->get_vars_read();
 	}
-	Vec<ComputationTree *> LoadComputation::get_merge_target(Variable *target) {
-		return program::get_merge_target(this->address, target);
+	Vec<Uptr<ComputationNode> *> LoadCn::get_merge_targets(Variable *target) {
+		return program::get_merge_targets(this->address, target);
 	}
-	std::string StoreComputation::to_string() const {
+	std::string StoreCn::to_string() const {
 		return "CT Store ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { address: "
-			+ program::to_string(this->address)
+			+ this->address->to_string()
 			+ ", value: "
-			+ program::to_string(this->value)
+			+ this->value->to_string()
 			+ " }";
 	}
-	Set<Variable*> StoreComputation::get_var_source() {
+	Set<Variable *> StoreCn::get_vars_read() const {
 		Set<Variable *> sol;
-		sol.merge(pick_variables(this->address));
-		sol.merge(pick_variables(this->value));
+		sol.merge(this->address->get_vars_read());
+		sol.merge(this->value->get_vars_read());
 		return sol;
 	}
-	Vec<ComputationTree *> StoreComputation::get_merge_target(Variable *target) {
-		Vec<ComputationTree *> sol = program::get_merge_target(this->address, target);
-		Vec<ComputationTree *> value_sol = program::get_merge_target(this->value, target);
+	Vec<Uptr<ComputationNode> *> StoreCn::get_merge_targets(Variable *target) {
+		Vec<Uptr<ComputationNode> *> sol = program::get_merge_targets(this->address, target);
+		Vec<Uptr<ComputationNode> *> value_sol = program::get_merge_targets(this->value, target);
 		sol += value_sol;
 		return sol;
 	}
-	std::string BranchComputation::to_string() const {
+	std::string BranchCn::to_string() const {
 		return "CT Branch ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { jmp_dest: "
 			+ program::to_string(this->jmp_dest)
 			+ ", condition: "
-			+ utils::to_string<ComputationTree, program::to_string>(this->condition)
+			+ utils::to_string<Uptr<ComputationNode>, program::to_string>(this->condition)
 			+ " }";
 	}
-	Set<Variable*> BranchComputation::get_var_source() {
-		if (this->condition.has_value()){
-			return pick_variables(*this->condition);
+	Set<Variable *> BranchCn::get_vars_read() const {
+		if (this->condition.has_value()) {
+			return (*this->condition)->get_vars_read();
 		}
 		return Set<Variable *>();
 	}
-	Vec<ComputationTree *> BranchComputation::get_merge_target(Variable *target) {
+	Vec<Uptr<ComputationNode> *> BranchCn::get_merge_targets(Variable *target) {
 		if (this->condition.has_value()){
-			return program::get_merge_target(*this->condition, target);
+			return program::get_merge_targets(*this->condition, target);
 		}
 		return {};
 	}
-	std::string ReturnComputation::to_string() const {
+	std::string ReturnCn::to_string() const {
 		return "CT Return ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { value: "
-			+ utils::to_string<ComputationTree, program::to_string>(this->value)
+			+ utils::to_string<Uptr<ComputationNode>, program::to_string>(this->value)
 			+ " }";
 	}
-	Set<Variable *> ReturnComputation::get_var_source(){
-		if (this->value.has_value()){
-			return pick_variables(*this->value);
+	Set<Variable *> ReturnCn::get_vars_read() const {
+		if (this->value.has_value()) {
+			return (*this->value)->get_vars_read();
 		}
 		return Set<Variable *>();
 	}
-	Vec<ComputationTree *> ReturnComputation::get_merge_target(Variable *target) {
-		if (this->value.has_value()){
-			return program::get_merge_target(*this->value, target);
+	Vec<Uptr<ComputationNode> *> ReturnCn::get_merge_targets(Variable *target) {
+		if (this->value.has_value()) {
+			return program::get_merge_targets(*this->value, target);
 		}
 		return {};
+	}
+	std::string to_string(const Uptr<ComputationNode> &node) {
+		return node->to_string();
+	}
+	std::string to_string(const ComputationNode &node) {
+		return node.to_string();
 	}
 
 	ComputationTreeBox::ComputationTreeBox(const Instruction &inst) :
 		root_nullable { inst.to_computation_tree() },
-		vars_read { this->root_nullable->get_var_source() },
-		var_written { this->root_nullable->get_var_dest() }
+		vars_read { this->root_nullable->get_vars_read() },
+		var_written { this->root_nullable->get_var_written() },
+		has_load { static_cast<bool>(dynamic_cast<LoadCn *>(this->root_nullable.get())) },
+		has_store { static_cast<bool>(dynamic_cast<StoreCn *>(this->root_nullable.get())) }
 	{}
-	const bool ComputationTreeBox::has_load() const {
-		return this->root_nullable->has_load;
-	}
-	const bool ComputationTreeBox::has_store() const {
-		return this->root_nullable->has_store;
-	}
-
 	bool ComputationTreeBox::merge(ComputationTreeBox &other) {
 		if (!other.get_var_written()) {
 			std::cerr << "can't merge these two trees because the child tree has no destination.\n";
 			exit(1);
 		}
 		Variable *var = *other.get_var_written();
-		Vec<ComputationTree *> merge_targets = this->root_nullable->get_merge_target(var);
+
+		Vec<Uptr<ComputationNode> *> merge_targets = this->root_nullable->get_merge_targets(var);
 		if (merge_targets.size() != 1) {
+			// FUTURE I don't know how to merge if there is more than one merge target
 			return false;
 		}
 
-		if (other.root_nullable->has_load) {
-			this->root_nullable->has_load = true;
+		// at this point, we will go through with the merge
+
+		if (other.get_has_load()) {
+			this->has_load = true;
 		}
-		if (other.root_nullable->has_store) {
-			this->root_nullable->has_store = true;
+		if (other.get_has_store()) {
+			this->has_store = true;
 		}
 
-		ComputationTree *merge_target = merge_targets[0];
-		if (MoveComputation *move_other = dynamic_cast<MoveComputation *>(other.root_nullable.get())) {
-			*merge_target = mv(move_other->source);
-		} else {
-			*merge_target = mv(other.root_nullable);
+		Uptr<ComputationNode> *merge_target = merge_targets[0];
+		Uptr<ComputationNode> *merge_child = &other.root_nullable;
+		if (MoveCn *move_node = dynamic_cast<MoveCn *>(merge_child->get())) {
+			// optimize away a child move node; e.g. a <- b <- c becomes a <- c
+			merge_child = &move_node->source;
 		}
-		other.root_nullable = nullptr; // just in case
+		*merge_target = mv(*merge_child);
+		other.root_nullable = nullptr;
 		return true;
 	}
 

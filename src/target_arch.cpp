@@ -42,17 +42,17 @@ namespace L3::code_gen::target_arch {
 	std::string to_l2_expr(int64_t number){
 		return std::to_string(number);
 	}
-	std::string to_l2_expr(const ComputationTree &tree) {
-		if (Variable *const *variable = std::get_if<Variable *>(&tree)) {
-			return to_l2_expr(*variable);
-		} else if (BasicBlock *const *block = std::get_if<BasicBlock *>(&tree)) {
-			return to_l2_expr(*block);
-		} else if (Function *const *function = std::get_if<Function *>(&tree)) {
-			return to_l2_expr(*function);
-		} else if (const int64_t *number = std::get_if<int64_t>(&tree)) {
-			return to_l2_expr(*number);
+	std::string to_l2_expr(const ComputationNode &node) {
+		if (node.destination.has_value()) {
+			return to_l2_expr(*node.destination);
+		} else if (const LabelCn *label_node = dynamic_cast<const LabelCn *>(&node)) {
+			return to_l2_expr(label_node->jmp_dest);
+		} else if (const FunctionCn *function_node = dynamic_cast<const FunctionCn *>(&node)) {
+			return to_l2_expr(function_node->function);
+		} else if (const NumberCn *number_node = dynamic_cast<const NumberCn *>(&node)) {
+			return to_l2_expr(number_node->value);
 		} else {
-			std::cout << "Error: I don't know how to convert this type of tree into L2 syntax.\n";
+			std::cout << "Error: I don't know how to convert this type of node into L2 syntax.\n";
 			exit(1);
 		}
 	}

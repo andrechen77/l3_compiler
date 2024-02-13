@@ -38,15 +38,6 @@ namespace L3::program {
 
 	struct AggregateScope;
 	struct ComputationNode;
-	using ComputationTree = std::variant<
-		Variable *,
-		BasicBlock *,
-		Function *,
-		int64_t,
-		Uptr<ComputationNode>
-	>;
-
-	Set<Variable *> pick_variables(ComputationTree &cmpTree);
 
 	// interface
 	class Expr {
@@ -54,7 +45,7 @@ namespace L3::program {
 		// virtual Set<Variable *> get_vars_on_read() const { return {}; }
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const { return {}; }
 		virtual void bind_to_scope(AggregateScope &agg_scope) = 0;
-		virtual ComputationTree to_computation_tree() const = 0;
+		virtual Uptr<ComputationNode> to_computation_tree() const = 0;
 		virtual std::string to_string() const = 0;
 		virtual void accept(ExprVisitor &v) = 0;
 	};
@@ -93,7 +84,7 @@ namespace L3::program {
 				return this->free_name;
 			}
 		}
-		virtual ComputationTree to_computation_tree() const override;
+		virtual Uptr<ComputationNode> to_computation_tree() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
@@ -108,7 +99,7 @@ namespace L3::program {
 
 		int64_t get_value() const { return this->value; }
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
-		virtual ComputationTree to_computation_tree() const override;
+		virtual Uptr<ComputationNode> to_computation_tree() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
@@ -125,7 +116,7 @@ namespace L3::program {
 		// virtual Set<Variable *> get_vars_on_read() const override;
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
-		virtual ComputationTree to_computation_tree() const override;
+		virtual Uptr<ComputationNode> to_computation_tree() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
@@ -162,7 +153,7 @@ namespace L3::program {
 		// virtual Set<Variable *> get_vars_on_read() const override;
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
-		virtual ComputationTree to_computation_tree() const override;
+		virtual Uptr<ComputationNode> to_computation_tree() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
@@ -180,7 +171,7 @@ namespace L3::program {
 		// virtual Set<Variable *> get_vars_on_read() const override;
 		// virtual Set<Variable *> get_vars_on_write(bool get_read_vars) const override;
 		virtual void bind_to_scope(AggregateScope &agg_scope) override;
-		virtual ComputationTree to_computation_tree() const override;
+		virtual Uptr<ComputationNode> to_computation_tree() const override;
 		virtual std::string to_string() const override;
 		virtual void accept(ExprVisitor &v) override { v.visit(*this); }
 	};
@@ -304,126 +295,161 @@ namespace L3::program {
 		virtual void accept(InstructionVisitor &v) override { v.visit(*this); }
 	};
 
-	std::string to_string(const ComputationTree &tree);
-
 	// represents a computation from a series of instructions, starting with
 	// the leaves as input and ultimately outputting the root.
+	// subclasses are suffixed "Cn" meaning "computation node"
 	struct ComputationNode {
-		Opt<Variable *> destination; // none if this computation is only for its side effects
-		bool has_load;
-		bool has_store;
+		Opt<Variable *> destination;
+		// none if this computation is only for its side effects, or if there is
+		// no actual L3 variable through which a computuation flows (e.g. `%a <-
+		// 1 + 2` doesn't have the values 1 and 2 flow through any variables)
 
 		ComputationNode(Opt<Variable *> destination) :
-			destination { destination },
-			has_load { false },
-			has_store { false }
+			destination { destination }
 		{}
 		virtual std::string to_string() const;
-		virtual Set<Variable*> get_var_source() = 0;
-		virtual Opt<Variable*> get_var_dest();
+		virtual Set<Variable*> get_vars_read() const = 0;
+		virtual Opt<Variable*> get_var_written() const;
 
 		// Returns every instance of the specific variable found in the leaves
 		// of the tree
-		virtual Vec<ComputationTree *> get_merge_target(Variable *target) = 0;
+		virtual Vec<Uptr<ComputationNode> *> get_merge_targets(Variable *target) = 0;
 	};
 
-	struct NoOpComputation : ComputationNode {
+	struct NoOpCn : ComputationNode {
 		// notice there is no destination
-		NoOpComputation() : ComputationNode({}) {}
+		NoOpCn() : ComputationNode({}) {}
 		virtual std::string to_string() const override;
-		virtual Set<Variable*> get_var_source() override;
-		virtual Vec<ComputationTree *> get_merge_target(Variable *target) override;
+		virtual Set<Variable*> get_vars_read() const override;
+		virtual Vec<Uptr<ComputationNode> *> get_merge_targets(Variable *target) override;
 	};
 
-	struct MoveComputation : ComputationNode {
-		ComputationTree source;
+	// represents an atomic "computation" that just returns the value of a variable
+	struct NumberCn : ComputationNode {
+		int64_t value;
 
-		MoveComputation(Opt<Variable *> destination, ComputationTree source) :
+		NumberCn(int64_t value) : ComputationNode({}), value { value } {}
+		virtual std::string to_string() const override;
+		virtual Set<Variable *> get_vars_read() const override;
+		virtual Vec<Uptr<ComputationNode> *> get_merge_targets(Variable *target) override;
+	};
+
+	// represents an atomic "computation" that just returns the value of a variable
+	struct VariableCn : ComputationNode {
+		// re-use the parent's destination field as the field "read" by this node
+		VariableCn(Variable *var) : ComputationNode({ var }) {}
+		virtual std::string to_string() const override;
+		virtual Set<Variable *> get_vars_read() const override;
+		virtual Vec<Uptr<ComputationNode> *> get_merge_targets(Variable *target) override;
+	};
+
+	// represents an atomic "computation" that just returns a function pointer
+	struct FunctionCn : ComputationNode {
+		Function *function;
+
+		FunctionCn(Function *function) : ComputationNode({}), function { function } {}
+		virtual std::string to_string() const override;
+		virtual Set<Variable *> get_vars_read() const override;
+		virtual Vec<Uptr<ComputationNode> *> get_merge_targets(Variable *target) override;
+	};
+
+	// represents an atomic "computation" that just returns a labeled location
+	struct LabelCn : ComputationNode {
+		BasicBlock *jmp_dest;
+
+		LabelCn(BasicBlock *jmp_dest) : ComputationNode({}), jmp_dest { jmp_dest } {}
+		virtual std::string to_string() const override;
+		virtual Set<Variable *> get_vars_read() const override;
+		virtual Vec<Uptr<ComputationNode> *> get_merge_targets(Variable *target) override;
+	};
+
+	struct MoveCn : ComputationNode {
+		Uptr<ComputationNode> source;
+
+		MoveCn(Opt<Variable *> destination, Uptr<ComputationNode> source) :
 			ComputationNode(destination), source { mv(source) }
 		{}
 		virtual std::string to_string() const override;
-		virtual Set<Variable*> get_var_source() override;
-		virtual Vec<ComputationTree *> get_merge_target(Variable *target);
+		virtual Set<Variable *> get_vars_read() const override;
+		virtual Vec<Uptr<ComputationNode> *> get_merge_targets(Variable *target) override;
 	};
 
-	struct BinaryComputation : ComputationNode {
+	struct BinaryCn : ComputationNode {
 		Operator op;
-		ComputationTree lhs;
-		ComputationTree rhs;
+		Uptr<ComputationNode> lhs;
+		Uptr<ComputationNode> rhs;
 
-		BinaryComputation(Opt<Variable *> destination, Operator op, ComputationTree lhs, ComputationTree rhs) :
+		BinaryCn(Opt<Variable *> destination, Operator op, Uptr<ComputationNode> lhs, Uptr<ComputationNode> rhs) :
 			ComputationNode(destination), op {op}, lhs { mv(lhs) }, rhs { mv(rhs) }
 		{}
 		virtual std::string to_string() const override;
-		virtual Set<Variable*> get_var_source() override;
-		virtual Vec<ComputationTree *> get_merge_target(Variable *target);
+		virtual Set<Variable *> get_vars_read() const override;
+		virtual Vec<Uptr<ComputationNode> *> get_merge_targets(Variable *target) override;
 	};
 
-	struct CallComputation : ComputationNode {
-		// TODO rename to callee
-		ComputationTree function;
-		Vec<ComputationTree> arguments;
+	struct CallCn : ComputationNode {
+		Uptr<ComputationNode> callee;
+		Vec<Uptr<ComputationNode>> arguments;
 
-		CallComputation(Opt<Variable *> destination, ComputationTree function, Vec<ComputationTree> arguments) :
-			ComputationNode(destination), function { mv(function) }, arguments { mv(arguments) }
+		CallCn(Opt<Variable *> destination, Uptr<ComputationNode> callee, Vec<Uptr<ComputationNode>> arguments) :
+			ComputationNode(destination), callee { mv(callee) }, arguments { mv(arguments) }
 		{}
 		virtual std::string to_string() const override;
-		virtual Set<Variable*> get_var_source() override;
-		virtual Vec<ComputationTree *> get_merge_target(Variable *target);
+		virtual Set<Variable *> get_vars_read() const override;
+		virtual Vec<Uptr<ComputationNode> *> get_merge_targets(Variable *target) override;
 
 	};
 
-	struct LoadComputation : ComputationNode {
-		ComputationTree address;
+	struct LoadCn : ComputationNode {
+		Uptr<ComputationNode> address;
 
-		LoadComputation(Opt<Variable *> destination, ComputationTree address) :
+		LoadCn(Opt<Variable *> destination, Uptr<ComputationNode> address) :
 			ComputationNode(destination), address { mv(address) }
-		{
-			has_load = true;
-		}
+		{}
 		virtual std::string to_string() const override;
-		virtual Set<Variable*> get_var_source() override;
-		virtual Vec<ComputationTree *> get_merge_target(Variable *target);
+		virtual Set<Variable *> get_vars_read() const override;
+		virtual Vec<Uptr<ComputationNode> *> get_merge_targets(Variable *target) override;
 	};
 
-	struct StoreComputation : ComputationNode {
-		ComputationTree address;
-		ComputationTree value;
+	struct StoreCn : ComputationNode {
+		Uptr<ComputationNode> address;
+		Uptr<ComputationNode> value;
 
 		// note that there is no destination argument
-		StoreComputation(ComputationTree address, ComputationTree value) :
+		StoreCn(Uptr<ComputationNode> address, Uptr<ComputationNode> value) :
 			ComputationNode({}), address { mv(address) }, value { mv(value) }
-		{
-			has_store = true;
-		}
+		{}
 		virtual std::string to_string() const override;
-		virtual Set<Variable*> get_var_source() override;
-		virtual Vec<ComputationTree *> get_merge_target(Variable* target) override;
+		virtual Set<Variable *> get_vars_read() const override;
+		virtual Vec<Uptr<ComputationNode> *> get_merge_targets(Variable* target) override;
 	};
 
-	struct BranchComputation : ComputationNode {
+	struct BranchCn : ComputationNode {
 		BasicBlock *jmp_dest;
-		Opt<ComputationTree> condition;
+		Opt<Uptr<ComputationNode>> condition;
 
 		// note that there is no destination argument
-		BranchComputation(BasicBlock *jmp_dest, Opt<ComputationTree> condition) :
+		BranchCn(BasicBlock *jmp_dest, Opt<Uptr<ComputationNode>> condition) :
 			ComputationNode({}), jmp_dest { jmp_dest }, condition { mv(condition) }
 		{}
 		virtual std::string to_string() const override;
-		virtual Set<Variable *> get_var_source() override;
-		virtual Vec<ComputationTree *> get_merge_target(Variable *target);
+		virtual Set<Variable *> get_vars_read() const override;
+		virtual Vec<Uptr<ComputationNode> *> get_merge_targets(Variable *target) override;
 	};
 
-	struct ReturnComputation : ComputationNode {
-		Opt<ComputationTree> value;
+	struct ReturnCn : ComputationNode {
+		Opt<Uptr<ComputationNode>> value;
 
 		// note that there is no destination argument
-		ReturnComputation() : ComputationNode({}), value {} {}
-		ReturnComputation(ComputationTree value) : ComputationNode({}), value { mv(value) } {}
+		ReturnCn() : ComputationNode({}), value {} {}
+		ReturnCn(Uptr<ComputationNode> value) : ComputationNode({}), value { mv(value) } {}
 		virtual std::string to_string() const override;
-		virtual Set<Variable *> get_var_source() override;
-		virtual Vec<ComputationTree *> get_merge_target(Variable *target);
+		virtual Set<Variable *> get_vars_read() const override;
+		virtual Vec<Uptr<ComputationNode> *> get_merge_targets(Variable *target) override;
 	};
+
+	std::string to_string(const Uptr<ComputationNode> &node);
+	std::string to_string(const ComputationNode &node);
 
 	// meant to hold a computation tree as well as all the information that comes
 	// along with it: variables read and variables written, as well as all
@@ -432,6 +458,8 @@ namespace L3::program {
 		Uptr<ComputationNode> root_nullable; // null means this box has been stolen from in a merge
 		Set<Variable *> vars_read;
 		Opt<Variable *> var_written;
+		bool has_load;
+		bool has_store;
 
 		public:
 
@@ -441,8 +469,8 @@ namespace L3::program {
 		const bool has_value() const { return static_cast<bool>(this->root_nullable); }
 		const Uptr<ComputationNode> &get_tree() const { return this->root_nullable; }
 		const Set<Variable *> &get_variables_read() const { return this->vars_read; }
-		const bool has_load() const;
-		const bool has_store() const;
+		const bool get_has_load() const { return this->has_load; }
+		const bool get_has_store() const { return this->has_store; }
 		const Opt<Variable *> &get_var_written() const { return this->var_written; }
 
 		// steals from the other ComputationTreeBox and merges.
@@ -481,6 +509,7 @@ namespace L3::program {
 		void mangle_name(std::string new_name) { this->name = mv(new_name); }
 		Vec<Uptr<Instruction>> &get_raw_instructions() { return this->raw_instructions; }
 		const Vec<Uptr<Instruction>> &get_raw_instructions() const { return this->raw_instructions; }
+		const Vec<ComputationTreeBox> &get_tree_boxes() const { return this->tree_boxes; }
 		const Vec<BasicBlock *> &get_succ_blocks() const { return this->succ_blocks; }
 		void generate_computation_trees(); // also generates the gen and kill sets
 		bool update_in_out_sets();

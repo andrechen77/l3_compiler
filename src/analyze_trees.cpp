@@ -111,7 +111,7 @@ namespace L3::program {
 				if (!has_conflict) {
 					// if the child is a load, there must be no stores between
 					// the child and parent
-					if (!child_iter->has_load()
+					if (!child_iter->get_has_load()
 						|| !earliest_store
 						|| *earliest_store >= parent_iter)
 					{
@@ -160,7 +160,7 @@ namespace L3::program {
 
 			Iter new_it = attempt_merge(it, alive_until, earliest_write, earliest_store);
 
-			if (new_it->has_store()) {
+			if (new_it->get_has_store()) {
 				earliest_store = it;
 			}
 

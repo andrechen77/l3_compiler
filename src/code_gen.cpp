@@ -7,17 +7,6 @@ namespace L3::code_gen {
 	using namespace std_alias;
 	using namespace L3::program;
 
-	// TODO: this module should assume that data flow has been generated
-	// (this means deleting calculate_computation trees)
-
-	Vec<Uptr<ComputationTree>> calculate_computation_trees(const BasicBlock &block) {
-		Vec<Uptr<ComputationTree>> result;
-		for (const Uptr<Instruction> &inst : block.get_raw_instructions()) {
-			result.push_back(mkuptr<ComputationTree>(inst->to_computation_tree()));
-		}
-		return result;
-	}
-
 	void generate_l3_function_code(const L3Function &l3_function, std::ostream &o) {
 		// function header
 		o << "\t(@" << l3_function.get_name()
@@ -38,8 +27,7 @@ namespace L3::code_gen {
 			if (block->get_name().size() > 0) {
 				o << "\t\t:" << block->get_name() << "\n";
 			}
-			Vec<Uptr<ComputationTree>> computation_trees = calculate_computation_trees(*block);
-			Vec<Uptr<tiles::Tile>> tiles = tiles::tile_trees(computation_trees);
+			Vec<Uptr<tiles::Tile>> tiles = tiles::tile_trees(block->get_tree_boxes());
 			for (const Uptr<tiles::Tile> &tile : tiles) {
 				for (const std::string &inst : tile->to_l2_instructions()) {
 					o << "\t\t" << inst << "\n";

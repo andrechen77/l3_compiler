@@ -26,21 +26,9 @@ namespace L3::code_gen::tiles {
 	struct MatchFailError {};
 	// the following are functions throwing MatchFailError used for matching
 	// purposes
-	template<typename T, typename Variant>
-	const T &unwrap_variant(const Variant &variant) {
-		const T *result = std::get_if<T>(&variant);
-		if (result) {
-			return *result;
-		} else {
-			throw MatchFailError {};
-		}
-	}
-	const Uptr<ComputationNode> &unwrap_node(const ComputationTree &tree) {
-		return unwrap_variant<Uptr<ComputationNode>>(tree);
-	}
 	template<typename NodeType>
-	const NodeType &unwrap_node_type(const Uptr<ComputationNode> &node) {
-		NodeType *downcasted = dynamic_cast<NodeType *>(node.get());
+	const NodeType &unwrap_node_type(const ComputationNode &node) {
+		const NodeType *downcasted = dynamic_cast<const NodeType *>(&node);
 		if (downcasted) {
 			return *downcasted;
 		} else {
@@ -51,6 +39,11 @@ namespace L3::code_gen::tiles {
 		if (!success) {
 			throw MatchFailError {};
 		}
+	}
+
+	template<typename... CnSubclasses>
+	bool is_dynamic_type(const ComputationNode &s) {
+		return (dynamic_cast<const CnSubclasses *>(&s) || ...);
 	}
 
 	// "CTR" stands for "computation tree rule", and is kind of like a pegtl
@@ -64,25 +57,31 @@ namespace L3::code_gen::tiles {
 	// when you write an incorrect rule.
 
 	namespace rules {
-		// Matches: a NoOpComputation variant of a ComputationTree, or one of the non-Node leaves
-		// Captures: nothing
+		// "Matches" describes what kind of node will be matched by the rule.
+		// "Captures" describes the elements of the resulting struct that are
+		// taken from the target. this does not include any children CTRs that
+		// are passed in the template parameters.
+
+		// Matches: a NoOpCn or an atomic computation node
 		struct NoOpCtr {
-			static NoOpCtr match(const ComputationTree &target) {
-				const Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target);
-				if (node) {
-					unwrap_node_type<NoOpComputation>(*node);
-					return {};
-				} else {
-					return {};
-				}
+			static NoOpCtr match(const ComputationNode &target) {
+				throw_unless(is_dynamic_type<
+					NoOpCn, VariableCn, FunctionCn, NumberCn, LabelCn
+				>(target));
+				return {};
 			}
 		};
 
-		struct VariableCtr {
-			Variable *var;
+		// Matches: any node
+		// Captures: the node matched
+		// This rule allows tiles to capture parts of the tree that they
+		// don't technically match, so that they can return those parts of the
+		// tree to be matched by other tiles
+		struct AnyCtr {
+			const ComputationNode *node;
 
-			static VariableCtr match(const ComputationTree &target) {
-				return { unwrap_variant<Variable *>(target) };
+			static AnyCtr match(const ComputationNode &target) {
+				return { &target };
 			}
 		};
 
@@ -90,80 +89,70 @@ namespace L3::code_gen::tiles {
 		// variants so that it doesn't seem like Uptr<ComputationNode> is a
 		// possibility
 
-		// Matches: A Variable * or int64_t variant of ComputationTree
-		// Captures: a copy of the ComputationTree
+		// Matches: A computation node that can be expressed as an "T"
+		// in L2 (i.e. a variable or number literal)
+		// Captures: the matched node
 		struct InexplicableTCtr {
-			ComputationTree value;
+			const ComputationNode *node;
 
-			static InexplicableTCtr match(const ComputationTree &target) {
-				if (Variable *const *x = std::get_if<Variable *>(&target)) {
-					return { *x };
-				} else if (const int64_t *x = std::get_if<int64_t>(&target)) {
-					return { *x };
-				} else {
-					throw MatchFailError {};
-				}
+			static InexplicableTCtr match(const ComputationNode &target) {
+				throw_unless(target.destination.has_value() || is_dynamic_type<NumberCn>(target));
+				return { &target };
 			}
 		};
 
+		// Matches: A computation node that can be expressed as an "S"
+		// in L2 (i.e. a variable, number literal, label, or function name)
+		// Captures: the matched node
 		struct InexplicableSCtr {
-			ComputationTree value;
+			const ComputationNode *node;
 
-			static InexplicableSCtr match(const ComputationTree &target) {
-				if (Variable *const *x = std::get_if<Variable *>(&target)) {
-					return { *x };
-				} else if (BasicBlock *const *x = std::get_if<BasicBlock *>(&target)) {
-					return { *x };
-				} else if (Function *const *x = std::get_if<Function *>(&target)) {
-					return { *x };
-				} else if (const int64_t *x = std::get_if<int64_t>(&target)) {
-					return { *x };
-				} else {
-					throw MatchFailError {};
-				}
+			static InexplicableSCtr match(const ComputationNode &target) {
+				throw_unless(target.destination.has_value()
+					|| is_dynamic_type<NumberCn, LabelCn, FunctionCn>(target));
+				return { &target };
 			}
 		};
 
-		// Matches: a ComputationNode variant of ComputationTree if there is a destination variable
-		// Captures: the Variable * in the node's destination field
+		// Matches: A computation node that can be expressed as a variable
+		// in L2 and satisfies the passed-in CTR.
+		// Captures: the destination variable
 		template<typename NodeCtr>
-		struct DestCtr {
-			Variable *dest;
+		struct VariableCtr {
+			Variable *var;
 			NodeCtr node;
 
-			static DestCtr match(const ComputationTree &target) {
-				const Uptr<ComputationNode> &node = unwrap_node(target);
-				throw_unless(node->destination.has_value());
-				return DestCtr { *node->destination, NodeCtr::match(target) };
+			static VariableCtr match(const ComputationNode &target) {
+				throw_unless(target.destination.has_value());
+				return { *target.destination, NodeCtr::match(target) };
 			}
 		};
 
-		// Matches: a MoveComputation variant of ComputationTree
-		// Captures: nothing
+		// Matches: a MoveCn
 		template<typename SourceCtr>
 		struct MoveCtr {
 			SourceCtr source;
 
-			static MoveCtr match(const ComputationTree &target) {
-				const MoveComputation &move_node = unwrap_node_type<MoveComputation>(unwrap_node(target));
-				return { SourceCtr::match(move_node.source) };
+			static MoveCtr match(const ComputationNode &target) {
+				const MoveCn &move_node = unwrap_node_type<MoveCn>(target);
+				return { SourceCtr::match(*move_node.source) };
 			}
 		};
 
-		// Matches: a BinaryComputation variant of ComputationTree
+		// Matches: a BinaryCn
 		// Captures: the Operator used
 		template<typename LhsCtr, typename RhsCtr>
-		struct BinaryArithCtr {
+		struct BinaryCtr {
 			Operator op;
 			LhsCtr lhs;
 			RhsCtr rhs;
 
-			static BinaryArithCtr match(const ComputationTree &target) {
-				const BinaryComputation &bin_node = unwrap_node_type<BinaryComputation>(unwrap_node(target));
+			static BinaryCtr match(const ComputationNode &target) {
+				const BinaryCn &bin_node = unwrap_node_type<BinaryCn>(target);
 				return {
 					bin_node.op,
-					LhsCtr::match(bin_node.lhs),
-					RhsCtr::match(bin_node.rhs)
+					LhsCtr::match(*bin_node.lhs),
+					RhsCtr::match(*bin_node.rhs)
 				};
 			}
 		};
@@ -189,19 +178,19 @@ namespace L3::code_gen::tiles {
 			virtual Vec<std::string> to_l2_instructions() const override {
 				return {};
 			}
-			virtual Vec<L3::program::ComputationTree *> get_unmatched() const override {
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
 				return {};
 			}
 		};
 
 		struct PureAssignment : Tile {
 			Variable *dest;
-			ComputationTree source;
+			const ComputationNode *source;
 
-			using Structure = DestCtr<MoveCtr<InexplicableSCtr>>;
+			using Structure = VariableCtr<MoveCtr<InexplicableSCtr>>;
 			PureAssignment(Structure s) :
-				dest { s.dest },
-				source { mv(s.node.source.value) }
+				dest { s.var },
+				source { s.node.source.node }
 			{}
 
 			static const int munch = 1;
@@ -209,31 +198,31 @@ namespace L3::code_gen::tiles {
 
 			virtual Vec<std::string> to_l2_instructions() const override {
 				return {
-					to_l2_expr(this->dest) + " <- " + to_l2_expr(this->source)
+					to_l2_expr(this->dest) + " <- " + to_l2_expr(*this->source)
 				};
 			}
-			virtual Vec<L3::program::ComputationTree *> get_unmatched() const override {
-				return {};
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				return { this->source };
 			}
 		};
 
 		struct BinaryArithmeticAssignment : Tile {
 			Variable *dest;
 			Operator op;
-			ComputationTree lhs;
-			ComputationTree rhs;
+			const ComputationNode *lhs;
+			const ComputationNode *rhs;
 
-			using Structure = DestCtr<
-				BinaryArithCtr<
+			using Structure = VariableCtr<
+				BinaryCtr<
 					InexplicableTCtr,
 					InexplicableTCtr
 				>
 			>;
 			BinaryArithmeticAssignment(Structure s) :
-				dest { s.dest },
+				dest { s.var },
 				op { s.node.op },
-				lhs { mv(s.node.lhs.value) },
-				rhs { mv(s.node.rhs.value) }
+				lhs { s.node.lhs.node },
+				rhs { s.node.rhs.node }
 			{
 				throw_unless(
 					this->op == Operator::plus
@@ -250,33 +239,33 @@ namespace L3::code_gen::tiles {
 
 			virtual Vec<std::string> to_l2_instructions() const override {
 				return {
-					"%_ <- " + to_l2_expr(this->lhs),
-					"%_ " + program::to_string(this->op) + "= " + to_l2_expr(this->rhs),
+					"%_ <- " + to_l2_expr(*this->lhs),
+					"%_ " + program::to_string(this->op) + "= " + to_l2_expr(*this->rhs),
 					to_l2_expr(this->dest) + " <- %_"
 				};
 			}
-			virtual Vec<L3::program::ComputationTree *> get_unmatched() const override {
-				return {};
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				return { this->lhs, this->rhs };
 			}
 		};
 
 		struct BinaryCompareAssignment : Tile {
 			Variable *dest;
 			Operator op;
-			ComputationTree lhs;
-			ComputationTree rhs;
+			const ComputationNode *lhs;
+			const ComputationNode *rhs;
 
-			using Structure = DestCtr<
-				BinaryArithCtr<
+			using Structure = VariableCtr<
+				BinaryCtr<
 					InexplicableTCtr,
 					InexplicableTCtr
 				>
 			>;
 			BinaryCompareAssignment(Structure s) :
-				dest { s.dest },
+				dest { s.var },
 				op { s.node.op },
-				lhs { mv(s.node.lhs.value) },
-				rhs { mv(s.node.rhs.value) }
+				lhs { s.node.lhs.node },
+				rhs { s.node.rhs.node }
 			{
 				throw_unless(
 					this->op == Operator::lt
@@ -292,19 +281,19 @@ namespace L3::code_gen::tiles {
 
 			virtual Vec<std::string> to_l2_instructions() const override {
 				// if we use gt or ge, mirror the operator and swap the operands
-				const ComputationTree *lhs_ptr = &this->lhs;
-				const ComputationTree *rhs_ptr = &this->rhs;
+				const ComputationNode *lhs_ptr = this->lhs;
+				const ComputationNode *rhs_ptr = this->rhs;
 				Operator l2_op = this->op;
 				switch (this->op) {
 					case Operator::gt:
 						l2_op = Operator::lt;
-						lhs_ptr = &this->rhs;
-						rhs_ptr = &this->lhs;
+						lhs_ptr = this->rhs;
+						rhs_ptr = this->lhs;
 						break;
 					case Operator::ge:
 						l2_op = Operator::le;
-						lhs_ptr = &this->rhs;
-						rhs_ptr = &this->lhs;
+						lhs_ptr = this->rhs;
+						rhs_ptr = this->lhs;
 						break;
 					// default cause is to do nothing
 				}
@@ -316,8 +305,8 @@ namespace L3::code_gen::tiles {
 					+ to_l2_expr(*rhs_ptr)
 				};
 			}
-			virtual Vec<L3::program::ComputationTree *> get_unmatched() const override {
-				return {};
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				return { this->lhs, this->rhs };
 			}
 		};
 	}
@@ -325,7 +314,7 @@ namespace L3::code_gen::tiles {
 	namespace tp = tile_patterns;
 
 	template<typename TP>
-	Opt<Uptr<TP>> attempt_tile_match(const ComputationTree &target) {
+	Opt<Uptr<TP>> attempt_tile_match(const ComputationNode &target) {
 		try {
 			return mkuptr<TP>(TP::Structure::match(target));
 		} catch (MatchFailError &e) {
@@ -334,7 +323,7 @@ namespace L3::code_gen::tiles {
 	}
 
 	template<typename TP>
-	void attempt_tile_match(const ComputationTree &tree, Opt<Uptr<Tile>> &out, int &best_munch, int &best_cost) {
+	void attempt_tile_match(const ComputationNode &tree, Opt<Uptr<Tile>> &out, int &best_munch, int &best_cost) {
 		if (TP::munch > best_munch || (TP::munch == best_munch && TP::cost <= best_cost)) {
 			Opt<Uptr<TP>> result = attempt_tile_match<TP>(tree);
 			if (result) {
@@ -345,11 +334,11 @@ namespace L3::code_gen::tiles {
 		}
 	}
 	template<typename... TPs>
-	void attempt_tile_matches(const ComputationTree &tree, Opt<Uptr<Tile>> &out, int &best_munch, int &best_cost) {
+	void attempt_tile_matches(const ComputationNode &tree, Opt<Uptr<Tile>> &out, int &best_munch, int &best_cost) {
 		(attempt_tile_match<TPs>(tree, out, best_munch, best_cost), ...);
 	}
 
-	Opt<Uptr<Tile>> find_best_tile(const ComputationTree &tree) {
+	Opt<Uptr<Tile>> find_best_tile(const ComputationNode &tree) {
 		Opt<Uptr<Tile>> best_match;
 		int best_munch = 0;
 		int best_cost = 0;
@@ -362,17 +351,17 @@ namespace L3::code_gen::tiles {
 		return best_match;
 	}
 
-	Vec<Uptr<Tile>> tile_trees(Vec<Uptr<ComputationTree>> &trees) {
+	Vec<Uptr<Tile>> tile_trees(const Vec<ComputationTreeBox> &tree_boxes) {
 		// build a stack to hold pointers to the currently untiled trees.
 		// the top of the stack is for trees that must be executed later
 		Vec<Uptr<Tile>> tiles; // stored in REVERSE order of execution
-		Vec<ComputationTree *> untiled_trees;
-		for (const Uptr<ComputationTree> &tree : trees) {
-			untiled_trees.push_back(tree.get());
+		Vec<const ComputationNode *> untiled_trees;
+		for (const ComputationTreeBox &tree_box : tree_boxes) {
+			untiled_trees.push_back(tree_box.get_tree().get());
 		}
 		while (!untiled_trees.empty()) {
 			// try to tile the top tree
-			ComputationTree *top_tree = untiled_trees.back();
+			const ComputationNode *top_tree = untiled_trees.back();
 			untiled_trees.pop_back();
 			Opt<Uptr<Tile>> best_match = find_best_tile(*top_tree);
 			if (!best_match) {
@@ -381,7 +370,7 @@ namespace L3::code_gen::tiles {
 				continue;
 				// exit(1);
 			}
-			for (ComputationTree *unmatched: (*best_match)->get_unmatched()) {
+			for (const ComputationNode *unmatched: (*best_match)->get_unmatched()) {
 				untiled_trees.push_back(unmatched);
 			}
 			tiles.push_back(mv(*best_match));
