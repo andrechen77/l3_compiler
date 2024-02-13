@@ -156,6 +156,19 @@ namespace L3::code_gen::tiles {
 				};
 			}
 		};
+
+		// Matches: a LoadCn
+		template<typename AddressCtr>
+		struct LoadCtr {
+			AddressCtr address;
+
+			static LoadCtr match(const ComputationNode &target) {
+				const LoadCn &load_node = unwrap_node_type<LoadCn>(target);
+				return {
+					AddressCtr::match(*load_node.address)
+				};
+			}
+		};
 	}
 
 	// To be used for matching, a Tile subclass must have:
@@ -309,6 +322,33 @@ namespace L3::code_gen::tiles {
 				return { this->lhs, this->rhs };
 			}
 		};
+
+		struct PureLoad : Tile {
+			Variable *dest;
+			const ComputationNode *address;
+
+			using Structure = VariableCtr<
+				LoadCtr<
+					VariableCtr<AnyCtr>
+				>
+			>;
+			PureLoad(Structure s) :
+				dest { s.var },
+				address { s.node.address.node.node }
+			{}
+
+			static const int munch = 1;
+			static const int cost = 1;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				return {
+					to_l2_expr(this->dest) + " <- mem " + to_l2_expr(*this->address) + " 0"
+				};
+			}
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				return { this->address };
+			}
+		};
 	}
 
 	namespace tp = tile_patterns;
@@ -346,7 +386,8 @@ namespace L3::code_gen::tiles {
 			tp::NoOp,
 			tp::PureAssignment,
 			tp::BinaryArithmeticAssignment,
-			tp::BinaryCompareAssignment
+			tp::BinaryCompareAssignment,
+			tp::PureLoad
 		>(tree, best_match, best_munch, best_cost);
 		return best_match;
 	}
