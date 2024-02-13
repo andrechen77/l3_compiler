@@ -62,12 +62,17 @@ namespace L3::code_gen::tiles {
 		// taken from the target. this does not include any children CTRs that
 		// are passed in the template parameters.
 
-		// Matches: a NoOpCn or an atomic computation node
+		// Matches: a NoOpCn or an atomic computation node that doens't do anything
+		// i.e. has no destination or is a VariableCn
 		struct NoOpCtr {
 			static NoOpCtr match(const ComputationNode &target) {
-				throw_unless(is_dynamic_type<
-					NoOpCn, VariableCn, FunctionCn, NumberCn, LabelCn
-				>(target));
+				throw_unless(
+					is_dynamic_type<NoOpCn, VariableCn>(target)
+					|| (
+						is_dynamic_type<FunctionCn, NumberCn, LabelCn>(target)
+						&& !target.destination.has_value()
+					)
+				);
 				return {};
 			}
 		};

@@ -307,7 +307,7 @@ namespace L3::program {
 	}
 
 	std::string ComputationNode::to_string() const {
-		return "CT Node ("
+		return "Cn ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") {}";
 	}
@@ -318,7 +318,7 @@ namespace L3::program {
 		return {};
 	}
 	std::string NoOpCn::to_string() const {
-		return "CT NoOp ("
+		return "NoOpCn ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") {}";
 	}
@@ -329,7 +329,15 @@ namespace L3::program {
 		return {};
 	}
 	std::string NumberCn::to_string() const {
-		return std::to_string(this->value);
+		if (this->destination) {
+			return "NumberCn ("
+				+ utils::to_string<Variable *, program::to_string>(this->destination)
+				+ ") { "
+				+ std::to_string(this->value)
+				+ " }";
+		} else {
+			return std::to_string(this->value);
+		}
 	}
 	Set<Variable *> NumberCn::get_vars_read() const {
 		return {};
@@ -351,7 +359,15 @@ namespace L3::program {
 		exit(1);
 	}
 	std::string FunctionCn::to_string() const {
-		return program::to_string(this->function);
+		if (this->destination) {
+			return "FunctionCn ("
+				+ utils::to_string<Variable *, program::to_string>(this->destination)
+				+ ") { "
+				+ program::to_string(this->function)
+				+ " }";
+		} else {
+			return program::to_string(this->function);
+		}
 	}
 	Set<Variable *> FunctionCn::get_vars_read() const {
 		return {};
@@ -360,7 +376,15 @@ namespace L3::program {
 		return {};
 	}
 	std::string LabelCn::to_string() const {
-		return program::to_string(this->jmp_dest);
+		if (this->destination) {
+			return "FunctionCn ("
+				+ utils::to_string<Variable *, program::to_string>(this->destination)
+				+ ") { "
+				+ program::to_string(this->jmp_dest)
+				+ " }";
+		} else {
+			return program::to_string(this->jmp_dest);
+		}
 	}
 	Set<Variable *> LabelCn::get_vars_read() const {
 		return {};
@@ -369,7 +393,7 @@ namespace L3::program {
 		return {};
 	}
 	std::string MoveCn::to_string() const {
-		return "CT Move ("
+		return "MoveCn ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { source: "
 			+ this->source->to_string()
@@ -382,7 +406,7 @@ namespace L3::program {
 		return program::get_merge_targets(this->source, target);
 	}
 	std::string BinaryCn::to_string() const {
-		return "CT Binary ("
+		return "BinaryCn ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { op: "
 			+ program::to_string(this->op)
@@ -405,7 +429,7 @@ namespace L3::program {
 		return sol;
 	}
 	std::string CallCn::to_string() const {
-		std::string result = "CT Call ("
+		std::string result = "CallCn ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { callee: "
 			+ this->callee->to_string()
@@ -431,7 +455,7 @@ namespace L3::program {
 		return sol;
 	}
 	std::string LoadCn::to_string() const {
-		return "CT Load ("
+		return "LoadCn ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { address: "
 			+ this->address->to_string()
@@ -444,7 +468,7 @@ namespace L3::program {
 		return program::get_merge_targets(this->address, target);
 	}
 	std::string StoreCn::to_string() const {
-		return "CT Store ("
+		return "StoreCn ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { address: "
 			+ this->address->to_string()
@@ -465,7 +489,7 @@ namespace L3::program {
 		return sol;
 	}
 	std::string BranchCn::to_string() const {
-		return "CT Branch ("
+		return "BranchCn ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { jmp_dest: "
 			+ program::to_string(this->jmp_dest)
@@ -486,7 +510,7 @@ namespace L3::program {
 		return {};
 	}
 	std::string ReturnCn::to_string() const {
-		return "CT Return ("
+		return "ReturnCn ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { value: "
 			+ utils::to_string<Uptr<ComputationNode>, program::to_string>(this->value)
