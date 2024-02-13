@@ -35,6 +35,14 @@ namespace L3::code_gen::tiles {
 			throw MatchFailError {};
 		}
 	}
+	template<typename T>
+	const T &unwrap_optional(const Opt<T> &opt) {
+		if (opt) {
+			return *opt;
+		} else {
+			throw MatchFailError {};
+		}
+	}
 	void throw_unless(bool success) {
 		if (!success) {
 			throw MatchFailError {};
@@ -200,6 +208,23 @@ namespace L3::code_gen::tiles {
 				throw_unless(!branch_node.condition.has_value());
 				return {
 					branch_node.jmp_dest
+				};
+			}
+		};
+
+		// Matches: a BranchCn with a condition
+		// Captures: the jmp_dest
+		template<typename ConditionCtr>
+		struct ConditionalBranchCtr {
+			BasicBlock *jmp_dest;
+			ConditionCtr condition;
+
+			static ConditionalBranchCtr match(const ComputationNode &target) {
+				const BranchCn &branch_node = unwrap_node_type<BranchCn>(target);
+				const Uptr<ComputationNode> &condition = unwrap_optional(branch_node.condition);
+				return {
+					branch_node.jmp_dest,
+					ConditionCtr::match(*condition)
 				};
 			}
 		};
@@ -428,6 +453,31 @@ namespace L3::code_gen::tiles {
 				return {};
 			}
 		};
+
+		struct PureConditionalBranch : Tile {
+			BasicBlock *jmp_dest;
+			const ComputationNode *condition;
+
+			using Structure = ConditionalBranchCtr<
+				InexplicableTCtr
+			>;
+			PureConditionalBranch(Structure s) :
+				jmp_dest { s.jmp_dest },
+				condition { s.condition.node }
+			{}
+
+			static const int munch = 1;
+			static const int cost = 1;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				return {
+					"cjump " + to_l2_expr(*this->condition) + " = 1 " + to_l2_expr(this->jmp_dest)
+				};
+			}
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				return { this->condition };
+			}
+		};
 	}
 
 	namespace tp = tile_patterns;
@@ -468,7 +518,8 @@ namespace L3::code_gen::tiles {
 			tp::BinaryCompareAssignment,
 			tp::PureLoad,
 			tp::PureStore,
-			tp::GotoStatement
+			tp::GotoStatement,
+			tp::PureConditionalBranch
 		>(tree, best_match, best_munch, best_cost);
 		return best_match;
 	}
