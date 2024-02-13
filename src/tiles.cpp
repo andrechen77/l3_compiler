@@ -237,6 +237,20 @@ namespace L3::code_gen::tiles {
 				return {};
 			}
 		};
+
+		// Matches: a ReturnCn with a value
+		template<typename ValueCtr>
+		struct ReturnValCtr {
+			ValueCtr value;
+
+			static ReturnValCtr match(const ComputationNode &target) {
+				const ReturnCn &return_node = unwrap_node_type<ReturnCn>(target);
+				const Uptr<ComputationNode> &value = unwrap_optional(return_node.value);
+				return {
+					ValueCtr::match(*value)
+				};
+			}
+		};
 	}
 
 	// To be used for matching, a Tile subclass must have:
@@ -502,6 +516,30 @@ namespace L3::code_gen::tiles {
 				return {};
 			}
 		};
+
+		struct ReturnVal : Tile {
+			const ComputationNode *value;
+
+			using Structure = ReturnValCtr<
+				InexplicableTCtr
+			>;
+			ReturnVal(Structure s) :
+				value { s.value.node }
+			{}
+
+			static const int munch = 1;
+			static const int cost = 1;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				return {
+					"rax <- " + to_l2_expr(*this->value),
+					"return"
+				};
+			}
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				return { this->value };
+			}
+		};
 	}
 
 	namespace tp = tile_patterns;
@@ -544,7 +582,8 @@ namespace L3::code_gen::tiles {
 			tp::PureStore,
 			tp::GotoStatement,
 			tp::PureConditionalBranch,
-			tp::ReturnVoid
+			tp::ReturnVoid,
+			tp::ReturnVal
 		>(tree, best_match, best_munch, best_cost);
 		return best_match;
 	}
