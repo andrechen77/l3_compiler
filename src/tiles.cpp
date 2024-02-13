@@ -189,6 +189,20 @@ namespace L3::code_gen::tiles {
 				};
 			}
 		};
+
+		// Matches: a BranchCn with no condition
+		// Captures: the jmp_dest
+		struct UnconditionalBranchCtr {
+			BasicBlock *jmp_dest;
+
+			static UnconditionalBranchCtr match(const ComputationNode &target) {
+				const BranchCn &branch_node = unwrap_node_type<BranchCn>(target);
+				throw_unless(!branch_node.condition.has_value());
+				return {
+					branch_node.jmp_dest
+				};
+			}
+		};
 	}
 
 	// To be used for matching, a Tile subclass must have:
@@ -395,6 +409,25 @@ namespace L3::code_gen::tiles {
 				return { this->address, this->source };
 			}
 		};
+
+		struct GotoStatement : Tile {
+			BasicBlock *jmp_dest;
+
+			using Structure = UnconditionalBranchCtr;
+			GotoStatement(Structure s) :
+				jmp_dest { s.jmp_dest }
+			{}
+
+			static const int munch = 1;
+			static const int cost = 1;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				return { "goto " + to_l2_expr(this->jmp_dest) };
+			}
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				return {};
+			}
+		};
 	}
 
 	namespace tp = tile_patterns;
@@ -434,7 +467,8 @@ namespace L3::code_gen::tiles {
 			tp::BinaryArithmeticAssignment,
 			tp::BinaryCompareAssignment,
 			tp::PureLoad,
-			tp::PureStore
+			tp::PureStore,
+			tp::GotoStatement
 		>(tree, best_match, best_munch, best_cost);
 		return best_match;
 	}
