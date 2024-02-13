@@ -260,39 +260,66 @@ namespace L3::code_gen::tiles {
 			}
 		};
 
-		// struct BinaryCompareAssignment : Tile {
-		// 	Variable *dest;
-		// 	Operator op;
-		// 	ComputationTree lhs;
-		// 	ComputationTree rhs;
+		struct BinaryCompareAssignment : Tile {
+			Variable *dest;
+			Operator op;
+			ComputationTree lhs;
+			ComputationTree rhs;
 
-		// 	using Structure = DestCtr<
-		// 		BinaryArithCtr<
-		// 			InexplicableTCtr,
-		// 			InexplicableTCtr
-		// 		>
-		// 	>;
-		// 	BinaryCompareAssignment(Structure s) :
-		// 		dest { s.dest },
-		// 		op { s.node.op },
-		// 		lhs { mv(s.node.lhs.value) },
-		// 		rhs { mv(s.node.rhs.value) }
-		// 	{}
+			using Structure = DestCtr<
+				BinaryArithCtr<
+					InexplicableTCtr,
+					InexplicableTCtr
+				>
+			>;
+			BinaryCompareAssignment(Structure s) :
+				dest { s.dest },
+				op { s.node.op },
+				lhs { mv(s.node.lhs.value) },
+				rhs { mv(s.node.rhs.value) }
+			{
+				throw_unless(
+					this->op == Operator::lt
+					|| this->op == Operator::le
+					|| this->op == Operator::eq
+					|| this->op == Operator::ge
+					|| this->op == Operator::gt
+				);
+			}
 
-		// 	static const int munch = 1;
-		// 	static const int cost = 1;
+			static const int munch = 1;
+			static const int cost = 1;
 
-		// 	virtual Vec<std::string> to_l2_instructions() const override {
-		// 		return {
-		// 			"%_ <- " + to_l2_expr(this->lhs),
-		// 			"%_ " + program::to_string(this->op) + "= " + to_l2_expr(this->rhs),
-		// 			to_l2_expr(this->dest) + " <- %_"
-		// 		};
-		// 	}
-		// 	virtual Vec<L3::program::ComputationTree *> get_unmatched() const override {
-		// 		return {};
-		// 	}
-		// };
+			virtual Vec<std::string> to_l2_instructions() const override {
+				// if we use gt or ge, mirror the operator and swap the operands
+				const ComputationTree *lhs_ptr = &this->lhs;
+				const ComputationTree *rhs_ptr = &this->rhs;
+				Operator l2_op = this->op;
+				switch (this->op) {
+					case Operator::gt:
+						l2_op = Operator::lt;
+						lhs_ptr = &this->rhs;
+						rhs_ptr = &this->lhs;
+						break;
+					case Operator::ge:
+						l2_op = Operator::le;
+						lhs_ptr = &this->rhs;
+						rhs_ptr = &this->lhs;
+						break;
+					// default cause is to do nothing
+				}
+
+				return {
+					to_l2_expr(this->dest) + " <- "
+					+ to_l2_expr(*lhs_ptr) + " "
+					+ program::to_string(l2_op) + " "
+					+ to_l2_expr(*rhs_ptr)
+				};
+			}
+			virtual Vec<L3::program::ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		};
 	}
 
 	namespace tp = tile_patterns;
@@ -329,7 +356,8 @@ namespace L3::code_gen::tiles {
 		attempt_tile_matches<
 			tp::NoOp,
 			tp::PureAssignment,
-			tp::BinaryArithmeticAssignment
+			tp::BinaryArithmeticAssignment,
+			tp::BinaryCompareAssignment
 		>(tree, best_match, best_munch, best_cost);
 		return best_match;
 	}
