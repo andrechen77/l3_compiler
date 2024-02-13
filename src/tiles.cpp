@@ -64,6 +64,20 @@ namespace L3::code_gen::tiles {
 	// when you write an incorrect rule.
 
 	namespace rules {
+		// Matches: a NoOpComputation variant of a ComputationTree, or one of the non-Node leaves
+		// Captures: nothing
+		struct NoOpCtr {
+			static NoOpCtr match(const ComputationTree &target) {
+				const Uptr<ComputationNode> *node = std::get_if<Uptr<ComputationNode>>(&target);
+				if (node) {
+					unwrap_node_type<NoOpComputation>(*node);
+					return {};
+				} else {
+					return {};
+				}
+			}
+		};
+
 		struct VariableCtr {
 			Variable *var;
 
@@ -127,12 +141,27 @@ namespace L3::code_gen::tiles {
 		using namespace rules;
 		using L3::code_gen::target_arch::to_l2_expr;
 
-		struct MyTile : Tile {
+		struct NoOp : Tile {
+			using Structure = NoOpCtr;
+			NoOp(Structure s) {}
+
+			static const int munch = 0;
+			static const int cost = 0;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				return {};
+			}
+			virtual Vec<L3::program::ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		};
+
+		struct PureAssignment : Tile {
 			Variable *dest;
 			ComputationTree source;
 
 			using Structure = DestCtr<MoveCtr<InexplicableSCtr>>;
-			MyTile(Structure s) :
+			PureAssignment(Structure s) :
 				dest { s.dest },
 				source { mv(s.node.source.value) }
 			{}
@@ -183,6 +212,8 @@ namespace L3::code_gen::tiles {
 		int best_munch = 0;
 		int best_cost = 0;
 		attempt_tile_matches<
+			tp::PureAssignment,
+			tp::NoOp
 		>(tree, best_match, best_munch, best_cost);
 		return best_match;
 	}
