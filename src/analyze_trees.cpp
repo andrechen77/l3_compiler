@@ -14,8 +14,11 @@ namespace L3::program {
 		// the algorithm starts at the end of the block
 		VarLiveness &l = this->var_liveness;
 		for (auto it = this->tree_boxes.rbegin(); it != this->tree_boxes.rend(); ++it) {
-			l.kill_set += it->get_variables_written();
-			l.gen_set -= it->get_variables_written();
+			const Opt<Variable *> &var_written = it->get_var_written();
+			if (var_written) {
+				l.kill_set.insert(*var_written);
+				l.gen_set.erase(*var_written);
+			}
 			l.gen_set += it->get_variables_read();
 		}
 
@@ -85,7 +88,7 @@ namespace L3::program {
 		if (alive_until_it != alive_until.end()) {
 			// the variable must be alive up until a tree within the same basic
 			// block (i.e. not until the end of the block)
-			if (!alive_until_it->second.has_value()) {
+			if (alive_until_it->second.has_value()) {
 				Iter parent_iter = *alive_until_it->second;
 
 				// there must be no instructions between the child and parent
@@ -108,7 +111,11 @@ namespace L3::program {
 						|| *earliest_store >= parent_iter)
 					{
 						// finally, we know it's okay to merge
-						parent_iter->merge(merge_var, *child_iter);
+						bool success = parent_iter->merge(*child_iter);
+						if (!success) {
+							std::cerr << "merge unsuccessful\n";
+						}
+						// TODO update earliest_write when a merge happens
 					}
 				}
 			}

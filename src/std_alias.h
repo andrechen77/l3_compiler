@@ -35,6 +35,12 @@ namespace std_alias {
 	using Pair = std::pair<T1, T2>;
 
 	template<typename D, typename S>
+	Vec<D> &operator+=(Vec<D> &dest, const Vec<S> &source) {
+		dest.insert(dest.end(), source.begin(), source.end());
+		return dest;
+	}
+
+	template<typename D, typename S>
 	Set<D> &operator+=(Set<D> &dest, const Set<S> &source) {
 		dest.insert(source.begin(), source.end());
 		return dest;

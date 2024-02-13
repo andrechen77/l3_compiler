@@ -3,10 +3,23 @@
 #include "utils.h"
 #include <assert.h>
 #include <map>
+#include <optional>
 #include <algorithm>
 
 namespace L3::program {
 	using namespace std_alias;
+
+	Set<Variable *> pick_variables(ComputationTree &cmpTree){
+		if (Variable **var = std::get_if<Variable *>(&cmpTree)) {
+			return {*var};
+		}
+		else if (Uptr<ComputationNode> *var = std::get_if<Uptr<ComputationNode>>(&cmpTree)){
+			return {(*var)->get_var_source()};
+		}
+		else {
+			return {};
+		}
+	}
 
 	template<> std::string ItemRef<Variable>::to_string() const {
 		std::string result = "%" + this->get_ref_name();
@@ -294,6 +307,16 @@ namespace L3::program {
 		return result;
 	}
 
+	Vec<ComputationTree *> get_merge_target(ComputationTree &tree, Variable *target) {
+		if (Variable **var = std::get_if<Variable *>(&tree)) {
+			if (*var == target){
+				return { &tree };
+			}
+		} else if (Uptr<ComputationNode> *var = std::get_if<Uptr<ComputationNode>>(&tree)) {
+			return (*var)->get_merge_target(target);
+		}
+		return {};
+	}
 	std::string to_string(const ComputationTree &tree) {
 		if (Variable *const *variable = std::get_if<Variable *>(&tree)) {
 			return program::to_string(*variable);
@@ -316,10 +339,22 @@ namespace L3::program {
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") {}";
 	}
+	Opt<Variable *> ComputationNode::get_var_dest() {
+		return this->destination;
+	}
+	Vec<ComputationTree *> get_merge_target(Variable *target) {
+		return {};
+	}
 	std::string NoOpComputation::to_string() const {
 		return "CT NoOp ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") {}";
+	}
+	Set<Variable *> NoOpComputation::get_var_source() {
+		return {};
+	}
+	Vec<ComputationTree *> NoOpComputation::get_merge_target(Variable *) {
+		return {};
 	}
 	std::string MoveComputation::to_string() const {
 		return "CT Move ("
@@ -327,6 +362,12 @@ namespace L3::program {
 			+ ") { source: "
 			+ program::to_string(source)
 			+ " }";
+	}
+	Set<Variable*> MoveComputation::get_var_source(){
+		return pick_variables(this->source);
+	}
+	Vec<ComputationTree *> MoveComputation::get_merge_target(Variable *target) {
+		return program::get_merge_target(this->source, target);
 	}
 	std::string BinaryComputation::to_string() const {
 		return "CT Binary ("
@@ -338,6 +379,18 @@ namespace L3::program {
 			+ ", rhs: "
 			+ program::to_string(this->rhs)
 			+ " }";
+	}
+	Set<Variable *> BinaryComputation::get_var_source(){
+		Set<Variable *> sol;
+		sol.merge(pick_variables(this->lhs));
+		sol.merge(pick_variables(this->rhs));
+		return sol;
+	}
+	Vec<ComputationTree *> BinaryComputation::get_merge_target(Variable *target){
+		Vec<ComputationTree *> sol = program::get_merge_target(this->lhs, target);
+		Vec<ComputationTree *> rhs_sol = program::get_merge_target(this->rhs, target);
+		sol += rhs_sol;
+		return sol;
 	}
 	std::string CallComputation::to_string() const {
 		std::string result = "CT Call ("
@@ -351,12 +404,32 @@ namespace L3::program {
 		result += "] }";
 		return result;
 	}
+	Set<Variable*> CallComputation::get_var_source(){
+		Set<Variable *> sol;
+		for (ComputationTree &cmptree: arguments) {
+			sol.merge(pick_variables(cmptree));
+		}
+		return sol;
+	}
+	Vec<ComputationTree*> CallComputation::get_merge_target(Variable *target) {
+		Vec<ComputationTree *> sol;
+		for (ComputationTree &cmptree: this->arguments) {
+			sol += program::get_merge_target(cmptree, target);
+		}
+		return sol;
+	}
 	std::string LoadComputation::to_string() const {
 		return "CT Load ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") { address: "
 			+ program::to_string(this->address)
 			+ " }";
+	}
+	Set<Variable*> LoadComputation::get_var_source(){
+		return pick_variables(this->address);
+	}
+	Vec<ComputationTree *> LoadComputation::get_merge_target(Variable *target) {
+		return program::get_merge_target(this->address, target);
 	}
 	std::string StoreComputation::to_string() const {
 		return "CT Store ("
@@ -367,6 +440,18 @@ namespace L3::program {
 			+ program::to_string(this->value)
 			+ " }";
 	}
+	Set<Variable*> StoreComputation::get_var_source() {
+		Set<Variable *> sol;
+		sol.merge(pick_variables(this->address));
+		sol.merge(pick_variables(this->value));
+		return sol;
+	}
+	Vec<ComputationTree *> StoreComputation::get_merge_target(Variable *target) {
+		Vec<ComputationTree *> sol = program::get_merge_target(this->address, target);
+		Vec<ComputationTree *> value_sol = program::get_merge_target(this->value, target);
+		sol += value_sol;
+		return sol;
+	}
 	std::string BranchComputation::to_string() const {
 		return "CT Branch ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
@@ -376,6 +461,18 @@ namespace L3::program {
 			+ utils::to_string<ComputationTree, program::to_string>(this->condition)
 			+ " }";
 	}
+	Set<Variable*> BranchComputation::get_var_source() {
+		if (this->condition.has_value()){
+			return pick_variables(*this->condition);
+		}
+		return Set<Variable *>();
+	}
+	Vec<ComputationTree *> BranchComputation::get_merge_target(Variable *target) {
+		if (this->condition.has_value()){
+			return program::get_merge_target(*this->condition, target);
+		}
+		return {};
+	}
 	std::string ReturnComputation::to_string() const {
 		return "CT Return ("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
@@ -383,24 +480,53 @@ namespace L3::program {
 			+ utils::to_string<ComputationTree, program::to_string>(this->value)
 			+ " }";
 	}
+	Set<Variable *> ReturnComputation::get_var_source(){
+		if (this->value.has_value()){
+			return pick_variables(*this->value);
+		}
+		return Set<Variable *>();
+	}
+	Vec<ComputationTree *> ReturnComputation::get_merge_target(Variable *target) {
+		if (this->value.has_value()){
+			return program::get_merge_target(*this->value, target);
+		}
+		return {};
+	}
 
 	ComputationTreeBox::ComputationTreeBox(const Instruction &inst) :
 		root_nullable { inst.to_computation_tree() },
-		vars_read {},
-		vars_written {}
-	{
-		// TODO calculate vars_read and vars_written
-	}
+		vars_read { this->root_nullable->get_var_source() },
+		var_written { this->root_nullable->get_var_dest() }
+	{}
 	const bool ComputationTreeBox::has_load() const {
-		return false; // TODO
+		return this->root_nullable->has_load;
 	}
 	const bool ComputationTreeBox::has_store() const {
-		return false; // TODO
+		return this->root_nullable->has_store;
 	}
 
-	void ComputationTreeBox::merge(Variable *var, ComputationTreeBox &other) {
-		// TODO
-		std::cout << "unimplemented: doing a single merge\n";
+	bool ComputationTreeBox::merge(ComputationTreeBox &other) {
+		if (!other.get_var_written()) {
+			std::cerr << "can't merge these two trees because the child tree has no destination.\n";
+			exit(1);
+		}
+		Variable *var = *other.get_var_written();
+		Vec<ComputationTree *> merge_targets = this->root_nullable->get_merge_target(var);
+		if (merge_targets.size() != 1) {
+			return false;
+		}
+
+		if (other.root_nullable->has_load) {
+			this->root_nullable->has_load = true;
+		}
+		if (other.root_nullable->has_store) {
+			this->root_nullable->has_store = true;
+		}
+
+		ComputationTree *merge_target = merge_targets[0];
+		*merge_target = mv(other.root_nullable);
+		other.root_nullable = nullptr; // just in case
+		return true;
 	}
 
 	BasicBlock::BasicBlock() {} // default-initialize everything

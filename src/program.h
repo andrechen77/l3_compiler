@@ -46,6 +46,8 @@ namespace L3::program {
 		Uptr<ComputationNode>
 	>;
 
+	Set<Variable *> pick_variables(ComputationTree &cmpTree);
+
 	// interface
 	class Expr {
 		public:
@@ -308,15 +310,29 @@ namespace L3::program {
 	// the leaves as input and ultimately outputting the root.
 	struct ComputationNode {
 		Opt<Variable *> destination; // none if this computation is only for its side effects
+		bool has_load;
+		bool has_store;
 
-		ComputationNode(Opt<Variable *> destination) : destination { destination } {}
+		ComputationNode(Opt<Variable *> destination) :
+			destination { destination },
+			has_load { false },
+			has_store { false }
+		{}
 		virtual std::string to_string() const;
+		virtual Set<Variable*> get_var_source() = 0;
+		virtual Opt<Variable*> get_var_dest();
+
+		// Returns every instance of the specific variable found in the leaves
+		// of the tree
+		virtual Vec<ComputationTree *> get_merge_target(Variable *target) = 0;
 	};
 
 	struct NoOpComputation : ComputationNode {
 		// notice there is no destination
 		NoOpComputation() : ComputationNode({}) {}
 		virtual std::string to_string() const override;
+		virtual Set<Variable*> get_var_source() override;
+		virtual Vec<ComputationTree *> get_merge_target(Variable *target) override;
 	};
 
 	struct MoveComputation : ComputationNode {
@@ -326,6 +342,8 @@ namespace L3::program {
 			ComputationNode(destination), source { mv(source) }
 		{}
 		virtual std::string to_string() const override;
+		virtual Set<Variable*> get_var_source() override;
+		virtual Vec<ComputationTree *> get_merge_target(Variable *target);
 	};
 
 	struct BinaryComputation : ComputationNode {
@@ -337,6 +355,8 @@ namespace L3::program {
 			ComputationNode(destination), op {op}, lhs { mv(lhs) }, rhs { mv(rhs) }
 		{}
 		virtual std::string to_string() const override;
+		virtual Set<Variable*> get_var_source() override;
+		virtual Vec<ComputationTree *> get_merge_target(Variable *target);
 	};
 
 	struct CallComputation : ComputationNode {
@@ -348,6 +368,9 @@ namespace L3::program {
 			ComputationNode(destination), function { mv(function) }, arguments { mv(arguments) }
 		{}
 		virtual std::string to_string() const override;
+		virtual Set<Variable*> get_var_source() override;
+		virtual Vec<ComputationTree *> get_merge_target(Variable *target);
+
 	};
 
 	struct LoadComputation : ComputationNode {
@@ -355,8 +378,12 @@ namespace L3::program {
 
 		LoadComputation(Opt<Variable *> destination, ComputationTree address) :
 			ComputationNode(destination), address { mv(address) }
-		{}
+		{
+			has_load = true;
+		}
 		virtual std::string to_string() const override;
+		virtual Set<Variable*> get_var_source() override;
+		virtual Vec<ComputationTree *> get_merge_target(Variable *target);
 	};
 
 	struct StoreComputation : ComputationNode {
@@ -366,8 +393,12 @@ namespace L3::program {
 		// note that there is no destination argument
 		StoreComputation(ComputationTree address, ComputationTree value) :
 			ComputationNode({}), address { mv(address) }, value { mv(value) }
-		{}
+		{
+			has_store = true;
+		}
 		virtual std::string to_string() const override;
+		virtual Set<Variable*> get_var_source() override;
+		virtual Vec<ComputationTree *> get_merge_target(Variable* target) override;
 	};
 
 	struct BranchComputation : ComputationNode {
@@ -379,6 +410,8 @@ namespace L3::program {
 			ComputationNode({}), jmp_dest { jmp_dest }, condition { mv(condition) }
 		{}
 		virtual std::string to_string() const override;
+		virtual Set<Variable *> get_var_source() override;
+		virtual Vec<ComputationTree *> get_merge_target(Variable *target);
 	};
 
 	struct ReturnComputation : ComputationNode {
@@ -388,6 +421,8 @@ namespace L3::program {
 		ReturnComputation() : ComputationNode({}), value {} {}
 		ReturnComputation(ComputationTree value) : ComputationNode({}), value { mv(value) } {}
 		virtual std::string to_string() const override;
+		virtual Set<Variable *> get_var_source() override;
+		virtual Vec<ComputationTree *> get_merge_target(Variable *target);
 	};
 
 	// meant to hold a computation tree as well as all the information that comes
@@ -396,21 +431,24 @@ namespace L3::program {
 	class ComputationTreeBox {
 		Uptr<ComputationNode> root_nullable; // null means this box has been stolen from in a merge
 		Set<Variable *> vars_read;
-		Set<Variable *> vars_written;
+		Opt<Variable *> var_written;
 
 		public:
 
 		ComputationTreeBox(const Instruction &inst);
+		// it is the reponsibility of the caller to make sure this box has a
+		// value before doing any other operation
 		const bool has_value() const { return static_cast<bool>(this->root_nullable); }
 		const Uptr<ComputationNode> &get_tree() const { return this->root_nullable; }
 		const Set<Variable *> &get_variables_read() const { return this->vars_read; }
-		const Set<Variable *> &get_variables_written() const { return this->vars_written; }
 		const bool has_load() const;
 		const bool has_store() const;
+		const Opt<Variable *> &get_var_written() const { return this->var_written; }
 
-		// steals from the other ComputationTreeBox and merges on the specified
-		// variable; fails if the other box doesn't write to the same variable
-		void merge(Variable *var, ComputationTreeBox &other);
+		// steals from the other ComputationTreeBox and merges.
+		// fails and returns false if there are too many or not enough merge
+		// targets.
+		bool merge(ComputationTreeBox &other);
 	};
 
 	class BasicBlock {
