@@ -1,5 +1,6 @@
 #include "analyze_trees.h"
 #include "std_alias.h"
+#include <algorithm>
 
 namespace L3::program {
 	using namespace std_alias;
@@ -72,15 +73,19 @@ namespace L3::program {
 	// helper function; attempts to merge the ComputationTreeBox at the
 	// child_iter and modifies the passed-in data structures to reflect that the
 	// specified tree has been encountered.
-	void attempt_merge(
+	// returns the new location of the child; either the same if merge did not
+	// qualify, otherwise the location of the parent that it merged into.
+	Iter attempt_merge(
 		Iter child_iter,
 		Map<Variable *, Opt<Iter>> &alive_until,
 		Map<Variable *, Iter> &earliest_write,
 		Opt<Iter> &earliest_store
 	) {
+		Iter result_iter = child_iter;
+
 		// attempt to merge on the variable that the tree writes to
 		const Uptr<ComputationNode> &tree = child_iter->get_tree();
-		if (!tree->destination) { return; }
+		if (!tree->destination) { return result_iter; }
 		Variable *merge_var = *tree->destination;
 
 		// the variable must still be alive after this write
@@ -112,8 +117,8 @@ namespace L3::program {
 					{
 						// finally, we know it's okay to merge
 						bool success = parent_iter->merge(*child_iter);
-						if (!success) {
-							std::cerr << "merge unsuccessful\n";
+						if (success) {
+							result_iter = parent_iter;
 						}
 						// TODO update earliest_write when a merge happens
 					}
@@ -126,7 +131,9 @@ namespace L3::program {
 
 		// no matter what, prevent merge_var from being used in another merge
 		// until another tree reads from it
-		earliest_write.insert({ merge_var, child_iter });
+		earliest_write.insert({ merge_var, result_iter });
+
+		return result_iter;
 	}
 	void BasicBlock::merge_trees() {
 		// This map stores all the variables alive at the current moment of
@@ -147,18 +154,18 @@ namespace L3::program {
 
 		for (Iter it = this->tree_boxes.rbegin(); it != this->tree_boxes.rend(); ++it) {
 			if (!it->has_value()) {
-				continue;
+				std::cerr << "should not have encountered an empty tree box\n";
+				exit(1);
 			}
 
-			attempt_merge(it, alive_until, earliest_write, earliest_store);
+			Iter new_it = attempt_merge(it, alive_until, earliest_write, earliest_store);
 
-			// TODO if the current tree is a store, then add it to the earliest store
-			if (it->has_store()) {
+			if (new_it->has_store()) {
 				earliest_store = it;
 			}
 
 			// add the current tree as a merge candidate for the variables it reads
-			for (Variable *var : it->get_variables_read()) {
+			for (Variable *var : new_it->get_variables_read()) {
 				auto alive_until_it = alive_until.find(var);
 				if (alive_until_it == alive_until.end()) {
 					// the variable is dead after this, so add this instruction as as merge candidate
@@ -166,6 +173,14 @@ namespace L3::program {
 				}
 			}
 		}
+
+		// remove all the null boxes
+		auto remove_begin = std::remove_if(
+			this->tree_boxes.begin(),
+			this->tree_boxes.end(),
+			[](const ComputationTreeBox &box) { return !box.has_value(); }
+		);
+		this->tree_boxes.erase(remove_begin, this->tree_boxes.end());
 	}
 }
 

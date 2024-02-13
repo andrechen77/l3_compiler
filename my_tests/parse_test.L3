@@ -20,7 +20,7 @@ define @main() {
 	br %_ :label
 	br 0 :label
 	call @fun_with_args(%a)
-	call print()
+	call print(%a)
 	%m <- %n
 	%dest <- call @fun_with_more_args(%a, %b, %c)
 	return
