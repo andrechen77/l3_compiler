@@ -86,6 +86,26 @@ namespace L3::code_gen::tiles {
 			}
 		};
 
+		// TODO inexplicableS and inexplicableT should probably return their own
+		// variants so that it doesn't seem like Uptr<ComputationNode> is a
+		// possibility
+
+		// Matches: A Variable * or int64_t variant of ComputationTree
+		// Captures: a copy of the ComputationTree
+		struct InexplicableTCtr {
+			ComputationTree value;
+
+			static InexplicableTCtr match(const ComputationTree &target) {
+				if (Variable *const *x = std::get_if<Variable *>(&target)) {
+					return { *x };
+				} else if (const int64_t *x = std::get_if<int64_t>(&target)) {
+					return { *x };
+				} else {
+					throw MatchFailError {};
+				}
+			}
+		};
+
 		struct InexplicableSCtr {
 			ComputationTree value;
 
@@ -127,6 +147,24 @@ namespace L3::code_gen::tiles {
 			static MoveCtr match(const ComputationTree &target) {
 				const MoveComputation &move_node = unwrap_node_type<MoveComputation>(unwrap_node(target));
 				return { SourceCtr::match(move_node.source) };
+			}
+		};
+
+		// Matches: a BinaryComputation variant of ComputationTree
+		// Captures: the Operator used
+		template<typename LhsCtr, typename RhsCtr>
+		struct BinaryArithCtr {
+			Operator op;
+			LhsCtr lhs;
+			RhsCtr rhs;
+
+			static BinaryArithCtr match(const ComputationTree &target) {
+				const BinaryComputation &bin_node = unwrap_node_type<BinaryComputation>(unwrap_node(target));
+				return {
+					bin_node.op,
+					LhsCtr::match(bin_node.lhs),
+					RhsCtr::match(bin_node.rhs)
+				};
 			}
 		};
 	}
@@ -178,6 +216,83 @@ namespace L3::code_gen::tiles {
 				return {};
 			}
 		};
+
+		struct BinaryArithmeticAssignment : Tile {
+			Variable *dest;
+			Operator op;
+			ComputationTree lhs;
+			ComputationTree rhs;
+
+			using Structure = DestCtr<
+				BinaryArithCtr<
+					InexplicableTCtr,
+					InexplicableTCtr
+				>
+			>;
+			BinaryArithmeticAssignment(Structure s) :
+				dest { s.dest },
+				op { s.node.op },
+				lhs { mv(s.node.lhs.value) },
+				rhs { mv(s.node.rhs.value) }
+			{
+				throw_unless(
+					this->op == Operator::plus
+					|| this->op == Operator::minus
+					|| this->op == Operator::times
+					|| this->op == Operator::bitwise_and
+					|| this->op == Operator::lshift
+					|| this->op == Operator::rshift
+				);
+			}
+
+			static const int munch = 1;
+			static const int cost = 1;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				return {
+					"%_ <- " + to_l2_expr(this->lhs),
+					"%_ " + program::to_string(this->op) + "= " + to_l2_expr(this->rhs),
+					to_l2_expr(this->dest) + " <- %_"
+				};
+			}
+			virtual Vec<L3::program::ComputationTree *> get_unmatched() const override {
+				return {};
+			}
+		};
+
+		// struct BinaryCompareAssignment : Tile {
+		// 	Variable *dest;
+		// 	Operator op;
+		// 	ComputationTree lhs;
+		// 	ComputationTree rhs;
+
+		// 	using Structure = DestCtr<
+		// 		BinaryArithCtr<
+		// 			InexplicableTCtr,
+		// 			InexplicableTCtr
+		// 		>
+		// 	>;
+		// 	BinaryCompareAssignment(Structure s) :
+		// 		dest { s.dest },
+		// 		op { s.node.op },
+		// 		lhs { mv(s.node.lhs.value) },
+		// 		rhs { mv(s.node.rhs.value) }
+		// 	{}
+
+		// 	static const int munch = 1;
+		// 	static const int cost = 1;
+
+		// 	virtual Vec<std::string> to_l2_instructions() const override {
+		// 		return {
+		// 			"%_ <- " + to_l2_expr(this->lhs),
+		// 			"%_ " + program::to_string(this->op) + "= " + to_l2_expr(this->rhs),
+		// 			to_l2_expr(this->dest) + " <- %_"
+		// 		};
+		// 	}
+		// 	virtual Vec<L3::program::ComputationTree *> get_unmatched() const override {
+		// 		return {};
+		// 	}
+		// };
 	}
 
 	namespace tp = tile_patterns;
@@ -212,8 +327,9 @@ namespace L3::code_gen::tiles {
 		int best_munch = 0;
 		int best_cost = 0;
 		attempt_tile_matches<
+			tp::NoOp,
 			tp::PureAssignment,
-			tp::NoOp
+			tp::BinaryArithmeticAssignment
 		>(tree, best_match, best_munch, best_cost);
 		return best_match;
 	}
