@@ -145,6 +145,9 @@ namespace L3::program {
 		// basic block, or if multiple instructions depend on that variable
 		// - Entry does not exist if the variable is not alive
 		Map<Variable *, Opt<Iter>> alive_until;
+		for (Variable *var : this->var_liveness.out_set) {
+			alive_until.insert({ var, Opt<Iter>() });
+		}
 
 		// Maps a variable to its earliest write seen so far within this basic block
 		Map<Variable *, Iter> earliest_write;
