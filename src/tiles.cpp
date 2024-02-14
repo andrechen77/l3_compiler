@@ -663,6 +663,40 @@ namespace L3::code_gen::tiles {
 			}
 		};
 
+		struct LoadWithOffset : Tile {
+			Variable *dest;
+			const ComputationNode *base;
+			int64_t offset;
+
+			using Structure = VariableCtr<
+				LoadCtr<
+					CommutativeBinaryCtr<
+						VariableCtr<AnyCtr>,
+						NumberCtr
+					>
+				>
+			>;
+			LoadWithOffset(Structure s) :
+				dest { s.var },
+				base { s.node.address.lhs.node.node },
+				offset { s.node.address.rhs.value }
+			{
+				throw_unless(this->offset % 8 == 0);
+			}
+
+			static const int munch = 2;
+			static const int cost = 1;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				return {
+					to_l2_expr(this->dest) + " <- mem " + to_l2_expr(*this->base) + " " + to_l2_expr(this->offset)
+				};
+			}
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				return { this->base };
+			}
+		};
+
 		struct PureStore : Tile {
 			const ComputationNode *address;
 			const ComputationNode *source;
@@ -875,6 +909,7 @@ namespace L3::code_gen::tiles {
 			tp::BinaryArithmeticAssignmentInPlace,
 			tp::BinaryCompareAssignment,
 			tp::PureLoad,
+			tp::LoadWithOffset,
 			tp::PureStore,
 			tp::GotoStatement,
 			tp::PureConditionalBranch,
