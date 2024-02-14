@@ -190,15 +190,41 @@ namespace L3::code_gen::tiles {
 			}
 		};
 
-		// Matches: a BinaryCn
+		// Matches: a BinaryCn where the order of the operands DOESN'T matter
 		// Captures: the Operator used
 		template<typename LhsCtr, typename RhsCtr>
-		struct BinaryCtr {
+		struct CommutativeBinaryCtr {
 			Operator op;
 			LhsCtr lhs;
 			RhsCtr rhs;
 
-			static BinaryCtr match(const ComputationNode &target) {
+			static CommutativeBinaryCtr match(const ComputationNode &target) {
+				const BinaryCn &bin_node = unwrap_node_type<BinaryCn>(target);
+				try {
+					return {
+						bin_node.op,
+						LhsCtr::match(*bin_node.lhs),
+						RhsCtr::match(*bin_node.rhs)
+					};
+				} catch (MatchFailError &e) {
+					return {
+						bin_node.op,
+						RhsCtr::match(*bin_node.lhs),
+						LhsCtr::match(*bin_node.rhs)
+					};
+				}
+			}
+		};
+
+		// Matches: a BinaryCn where the order of the operands DOES matter
+		// Captures: the Operator used
+		template<typename LhsCtr, typename RhsCtr>
+		struct NoncommutativeBinaryCtr {
+			Operator op;
+			LhsCtr lhs;
+			RhsCtr rhs;
+
+			static NoncommutativeBinaryCtr match(const ComputationNode &target) {
 				const BinaryCn &bin_node = unwrap_node_type<BinaryCn>(target);
 				return {
 					bin_node.op,
@@ -395,7 +421,7 @@ namespace L3::code_gen::tiles {
 			const ComputationNode *rhs;
 
 			using Structure = VariableCtr<
-				BinaryCtr<
+				NoncommutativeBinaryCtr<
 					InexplicableTCtr,
 					InexplicableTCtr
 				>
@@ -417,7 +443,7 @@ namespace L3::code_gen::tiles {
 			}
 
 			static const int munch = 1;
-			static const int cost = 1;
+			static const int cost = 3;
 
 			virtual Vec<std::string> to_l2_instructions() const override {
 				return {
@@ -438,7 +464,7 @@ namespace L3::code_gen::tiles {
 			const ComputationNode *rhs;
 
 			using Structure = VariableCtr<
-				BinaryCtr<
+				NoncommutativeBinaryCtr<
 					InexplicableTCtr,
 					InexplicableTCtr
 				>
@@ -615,7 +641,7 @@ namespace L3::code_gen::tiles {
 			{}
 
 			static const int munch = 1;
-			static const int cost = 1;
+			static const int cost = 2;
 
 			virtual Vec<std::string> to_l2_instructions() const override {
 				return {
