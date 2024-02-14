@@ -174,7 +174,7 @@ namespace L3::program {
 					// the variable is dead after this, so add this instruction
 					// as as merge candidate
 					alive_until.insert({ var, new_it });
-				} else {
+				} else if (alive_until_it->second < new_it) {
 					// the variable is alive after this tree so no one can EVER
 					// be a merge candidate until the variable is written to
 					alive_until_it->second = Opt<Iter>();
