@@ -572,6 +572,105 @@ namespace L3::code_gen::tiles {
 			}
 		};
 
+		struct LeaShift : Tile {
+			Variable *dest;
+			const ComputationNode *base;
+			const ComputationNode *offset;
+			int64_t shift_amt;
+
+			using Structure = VariableCtr<
+				CommutativeBinaryCtr<
+					VariableCtr<AnyCtr>,
+					CommutativeBinaryCtr<
+						VariableCtr<AnyCtr>,
+						NumberCtr
+					>
+				>
+			>;
+			LeaShift(Structure s) :
+				dest { s.var },
+				base { s.node.lhs.node.node },
+				offset { s.node.rhs.lhs.node.node },
+				shift_amt { s.node.rhs.rhs.value }
+			{
+				throw_unless(
+					s.node.op == Operator::plus && (
+						(s.node.rhs.op == Operator::lshift && (
+							this->shift_amt == 0
+							|| this->shift_amt == 1
+							|| this->shift_amt == 2
+							|| this->shift_amt == 3
+						)) || (s.node.rhs.op == Operator::rshift && (
+							this->shift_amt == 0
+						))
+					)
+				);
+			}
+
+			static const int munch = 2;
+			static const int cost = 1;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				int64_t scale = 1 << this->shift_amt;
+				return {
+					to_l2_expr(this->dest) +
+					" @ " + to_l2_expr(*this->base) +
+					" " + to_l2_expr(*this->offset) +
+					" " + to_l2_expr(scale)
+				};
+			}
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				return { this->base, this->offset };
+			}
+		};
+
+		struct LeaMultiply : Tile {
+			Variable *dest;
+			const ComputationNode *base;
+			const ComputationNode *offset;
+			int64_t scale;
+
+			using Structure = VariableCtr<
+				CommutativeBinaryCtr<
+					VariableCtr<AnyCtr>,
+					CommutativeBinaryCtr<
+						VariableCtr<AnyCtr>,
+						NumberCtr
+					>
+				>
+			>;
+			LeaMultiply(Structure s) :
+				dest { s.var },
+				base { s.node.lhs.node.node },
+				offset { s.node.rhs.lhs.node.node },
+				scale { s.node.rhs.rhs.value }
+			{
+				throw_unless(
+					s.node.op == Operator::plus
+					&& s.node.rhs.op == Operator::times
+					&& (this->scale == 1
+						|| this->scale == 2
+						|| this->scale == 4
+						|| this->scale == 8)
+				);
+			}
+
+			static const int munch = 2;
+			static const int cost = 1;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				return {
+					to_l2_expr(this->dest) +
+					" @ " + to_l2_expr(*this->base) +
+					" " + to_l2_expr(*this->offset) +
+					" " + to_l2_expr(this->scale)
+				};
+			}
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				return { this->base, this->offset };
+			}
+		};
+
 		struct BinaryCompareAssignment : Tile {
 			Variable *dest;
 			Operator op;
@@ -958,6 +1057,8 @@ namespace L3::code_gen::tiles {
 			tp::BinaryArithmeticAssignment,
 			tp::BinaryArithmeticAssignmentDistinct,
 			tp::BinaryArithmeticAssignmentInPlace,
+			tp::LeaMultiply,
+			tp::LeaShift,
 			tp::BinaryCompareAssignment,
 			tp::PureLoad,
 			tp::LoadWithOffset,
