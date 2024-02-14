@@ -127,6 +127,19 @@ namespace L3::code_gen::tiles {
 			}
 		};
 
+		// Matches: a computation node that can be expressed as a "U" (i.e. a
+		// variable or function name) or is one of the std functions in L2
+		// Captures: the matched node
+		struct CallableCtr {
+			const ComputationNode *node;
+
+			static CallableCtr match(const ComputationNode &target) {
+				throw_unless(target.destination.has_value()
+					|| is_dynamic_type<FunctionCn>(target));
+				return { &target };
+			}
+		};
+
 		// Matches: A computation node that can be expressed as a variable
 		// in L2 and satisfies the passed-in CTR.
 		// Captures: the destination variable
@@ -138,6 +151,18 @@ namespace L3::code_gen::tiles {
 			static VariableCtr match(const ComputationNode &target) {
 				throw_unless(target.destination.has_value());
 				return { *target.destination, NodeCtr::match(target) };
+			}
+		};
+
+		// Matches: any computation node
+		// Captures: the destination variable IF IT EXISTS
+		template<typename NodeCtr>
+		struct MaybeVariableCtr {
+			Opt<Variable *> maybe_var;
+			NodeCtr node;
+
+			static MaybeVariableCtr match(const ComputationNode &target) {
+				return { target.destination, NodeCtr::match(target) };
 			}
 		};
 
@@ -248,6 +273,28 @@ namespace L3::code_gen::tiles {
 				const Uptr<ComputationNode> &value = unwrap_optional(return_node.value);
 				return {
 					ValueCtr::match(*value)
+				};
+			}
+		};
+
+		// Matches: a CallCn
+		// Captures: a vector with pointers to all the argument ComputationNodes
+		template<typename CalleeCtr>
+		struct CallCtr {
+			CalleeCtr callee;
+			Vec<const ComputationNode *> arguments;
+
+			static CallCtr match(const ComputationNode &target) {
+				const CallCn &call_node = unwrap_node_type<CallCn>(target);
+
+				Vec<const ComputationNode *> arguments;
+				for (const Uptr<ComputationNode> &arg : call_node.arguments) {
+					arguments.push_back(arg.get());
+				}
+
+				return {
+					CalleeCtr::match(*call_node.callee),
+					mv(arguments)
 				};
 			}
 		};
@@ -540,6 +587,68 @@ namespace L3::code_gen::tiles {
 				return { this->value };
 			}
 		};
+
+		struct Call : Tile {
+			Opt<Variable *> maybe_dest;
+			const ComputationNode *callee;
+			Vec<const ComputationNode *> arguments;
+
+			using Structure = MaybeVariableCtr<
+				CallCtr<CallableCtr>
+			>;
+			Call(Structure s) :
+				maybe_dest { s.maybe_var },
+				callee { s.node.callee.node },
+				arguments { mv(s.node.arguments) }
+			{}
+
+			static const int munch = 1;
+			static const int cost = 1;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				static int num_call_return_labels = 0; // the number of call-return labels we've seen so far
+				static const std::string call_return_label_prefix = ":callret";
+
+				Vec<std::string> result;
+
+				// add the instructions preparing the arguments
+				for (int i = 0; i < this->arguments.size(); ++i) {
+					result.push_back(target_arch::get_argument_prepping_instruction(
+						to_l2_expr(*this->arguments[i]),
+						i
+					));
+				}
+
+				// add the actual call instruction
+				result.push_back("call " + to_l2_expr(*this->callee) + " " + std::to_string(this->arguments.size()));
+
+				// wrap in return label if the function is not an std function
+				const FunctionCn *maybe_fun_cn_ptr = dynamic_cast<const FunctionCn *>(this->callee);
+				bool is_std = maybe_fun_cn_ptr && dynamic_cast<const ExternalFunction *>(maybe_fun_cn_ptr->function);
+				if (!is_std) {
+					std::string return_label = call_return_label_prefix + std::to_string(num_call_return_labels);
+					num_call_return_labels += 1;
+
+					result.insert(
+						result.end() - 1, // insert before the call instruction
+						"mem rsp -8 <- " + return_label
+					);
+					result.push_back(mv(return_label));
+				}
+
+				// store the return value if the call returns something
+				if (this->maybe_dest) {
+					result.push_back(to_l2_expr(*this->maybe_dest) + " <- rax");
+				}
+
+				return result;
+			}
+			virtual Vec<const ComputationNode *> get_unmatched() const override {
+				Vec<const ComputationNode *> result = this->arguments;
+				result.push_back(this->callee);
+				return result;
+			}
+		};
 	}
 
 	namespace tp = tile_patterns;
@@ -583,7 +692,8 @@ namespace L3::code_gen::tiles {
 			tp::GotoStatement,
 			tp::PureConditionalBranch,
 			tp::ReturnVoid,
-			tp::ReturnVal
+			tp::ReturnVal,
+			tp::Call
 		>(tree, best_match, best_munch, best_cost);
 		return best_match;
 	}
