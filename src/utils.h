@@ -22,7 +22,7 @@ namespace utils {
     template<typename T, std::string to_str(const T &)>
     std::string to_string(const Opt<T> &val) {
         if (val) {
-            return "Some(" + to_str(*val) + ")";
+            return to_str(*val);
         } else {
             return "None";
         }

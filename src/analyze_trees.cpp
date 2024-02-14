@@ -169,7 +169,7 @@ namespace L3::program {
 				auto alive_until_it = alive_until.find(var);
 				if (alive_until_it == alive_until.end()) {
 					// the variable is dead after this, so add this instruction as as merge candidate
-					alive_until.insert({ var, it });
+					alive_until.insert({ var, new_it });
 				}
 			}
 		}

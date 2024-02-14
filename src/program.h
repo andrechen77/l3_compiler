@@ -456,8 +456,6 @@ namespace L3::program {
 	// possible merge candidates
 	class ComputationTreeBox {
 		Uptr<ComputationNode> root_nullable; // null means this box has been stolen from in a merge
-		Set<Variable *> vars_read;
-		Opt<Variable *> var_written;
 		bool has_load;
 		bool has_store;
 
@@ -468,10 +466,10 @@ namespace L3::program {
 		// value before doing any other operation
 		const bool has_value() const { return static_cast<bool>(this->root_nullable); }
 		const Uptr<ComputationNode> &get_tree() const { return this->root_nullable; }
-		const Set<Variable *> &get_variables_read() const { return this->vars_read; }
+		Set<Variable *> get_variables_read() const { return this->root_nullable->get_vars_read(); }
 		const bool get_has_load() const { return this->has_load; }
 		const bool get_has_store() const { return this->has_store; }
-		const Opt<Variable *> &get_var_written() const { return this->var_written; }
+		Opt<Variable *> get_var_written() const { return this->root_nullable->get_var_written(); }
 
 		// steals from the other ComputationTreeBox and merges.
 		// fails and returns false if there are too many or not enough merge

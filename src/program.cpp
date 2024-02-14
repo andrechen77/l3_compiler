@@ -300,6 +300,8 @@ namespace L3::program {
 		if (VariableCn *var_node = dynamic_cast<VariableCn *>(tree.get())) {
 			if (var_node->destination == target) {
 				return { &tree };
+			} else {
+				return {};
 			}
 		}
 
@@ -307,7 +309,7 @@ namespace L3::program {
 	}
 
 	std::string ComputationNode::to_string() const {
-		return "Cn ("
+		return "("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
 			+ ") {}";
 	}
@@ -318,9 +320,9 @@ namespace L3::program {
 		return {};
 	}
 	std::string NoOpCn::to_string() const {
-		return "NoOpCn ("
+		return "("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
-			+ ") {}";
+			+ ") NoOp {}";
 	}
 	Set<Variable *> NoOpCn::get_vars_read() const {
 		return {};
@@ -330,9 +332,9 @@ namespace L3::program {
 	}
 	std::string NumberCn::to_string() const {
 		if (this->destination) {
-			return "NumberCn ("
+			return "("
 				+ utils::to_string<Variable *, program::to_string>(this->destination)
-				+ ") { "
+				+ ") NumberCn { "
 				+ std::to_string(this->value)
 				+ " }";
 		} else {
@@ -360,9 +362,9 @@ namespace L3::program {
 	}
 	std::string FunctionCn::to_string() const {
 		if (this->destination) {
-			return "FunctionCn ("
+			return "("
 				+ utils::to_string<Variable *, program::to_string>(this->destination)
-				+ ") { "
+				+ ") FunctionCn { "
 				+ program::to_string(this->function)
 				+ " }";
 		} else {
@@ -377,9 +379,9 @@ namespace L3::program {
 	}
 	std::string LabelCn::to_string() const {
 		if (this->destination) {
-			return "FunctionCn ("
+			return "("
 				+ utils::to_string<Variable *, program::to_string>(this->destination)
-				+ ") { "
+				+ ") LabelCn { "
 				+ program::to_string(this->jmp_dest)
 				+ " }";
 		} else {
@@ -393,9 +395,9 @@ namespace L3::program {
 		return {};
 	}
 	std::string MoveCn::to_string() const {
-		return "MoveCn ("
+		return "("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
-			+ ") { source: "
+			+ ") MoveCn { "
 			+ this->source->to_string()
 			+ " }";
 	}
@@ -406,13 +408,13 @@ namespace L3::program {
 		return program::get_merge_targets(this->source, target);
 	}
 	std::string BinaryCn::to_string() const {
-		return "BinaryCn ("
+		return "("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
-			+ ") { op: "
+			+ ") "
 			+ program::to_string(this->op)
-			+ ", lhs: "
+			+ " { "
 			+ this->lhs->to_string()
-			+ ", rhs: "
+			+ ", "
 			+ this->rhs->to_string()
 			+ " }";
 	}
@@ -429,11 +431,11 @@ namespace L3::program {
 		return sol;
 	}
 	std::string CallCn::to_string() const {
-		std::string result = "CallCn ("
+		std::string result = "("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
-			+ ") { callee: "
+			+ ") CallCn { "
 			+ this->callee->to_string()
-			+ ", args: [";
+			+ ", [";
 		for (const Uptr<ComputationNode> &tree : this->arguments) {
 			result += tree->to_string() + ", ";
 		}
@@ -455,9 +457,9 @@ namespace L3::program {
 		return sol;
 	}
 	std::string LoadCn::to_string() const {
-		return "LoadCn ("
+		return "("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
-			+ ") { address: "
+			+ ") LoadCn { "
 			+ this->address->to_string()
 			+ " }";
 	}
@@ -468,11 +470,11 @@ namespace L3::program {
 		return program::get_merge_targets(this->address, target);
 	}
 	std::string StoreCn::to_string() const {
-		return "StoreCn ("
+		return "("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
-			+ ") { address: "
+			+ ") StoreCn { "
 			+ this->address->to_string()
-			+ ", value: "
+			+ ", "
 			+ this->value->to_string()
 			+ " }";
 	}
@@ -489,11 +491,11 @@ namespace L3::program {
 		return sol;
 	}
 	std::string BranchCn::to_string() const {
-		return "BranchCn ("
+		return "("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
-			+ ") { jmp_dest: "
+			+ ") BranchCn { "
 			+ program::to_string(this->jmp_dest)
-			+ ", condition: "
+			+ ", "
 			+ utils::to_string<Uptr<ComputationNode>, program::to_string>(this->condition)
 			+ " }";
 	}
@@ -510,9 +512,9 @@ namespace L3::program {
 		return {};
 	}
 	std::string ReturnCn::to_string() const {
-		return "ReturnCn ("
+		return "("
 			+ utils::to_string<Variable *, program::to_string>(this->destination)
-			+ ") { value: "
+			+ ") ReturnCn { "
 			+ utils::to_string<Uptr<ComputationNode>, program::to_string>(this->value)
 			+ " }";
 	}
@@ -537,8 +539,6 @@ namespace L3::program {
 
 	ComputationTreeBox::ComputationTreeBox(const Instruction &inst) :
 		root_nullable { inst.to_computation_tree() },
-		vars_read { this->root_nullable->get_vars_read() },
-		var_written { this->root_nullable->get_var_written() },
 		has_load { static_cast<bool>(dynamic_cast<LoadCn *>(this->root_nullable.get())) },
 		has_store { static_cast<bool>(dynamic_cast<StoreCn *>(this->root_nullable.get())) }
 	{}
