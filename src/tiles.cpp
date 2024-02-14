@@ -503,6 +503,67 @@ namespace L3::code_gen::tiles {
 			}
 		};
 
+		struct BinaryArithmeticAssignmentInPlace : Tile {
+			Variable *dest;
+			Operator op;
+			const ComputationNode *lhs;
+			const ComputationNode *rhs;
+
+			using Structure = VariableCtr<
+				NoncommutativeBinaryCtr<
+					InexplicableTCtr,
+					InexplicableTCtr
+				>
+			>;
+			BinaryArithmeticAssignmentInPlace(Structure s) :
+				dest { s.var },
+				op { s.node.op },
+				lhs { s.node.lhs.node },
+				rhs { s.node.rhs.node }
+			{
+				throw_unless(
+					this->op == Operator::plus
+					|| this->op == Operator::minus
+					|| this->op == Operator::times
+					|| this->op == Operator::bitwise_and
+					|| this->op == Operator::lshift
+					|| this->op == Operator::rshift
+				);
+				bool assign_to_lhs = this->lhs->destination.has_value() && this->dest == *this->lhs->destination;
+				if (!assign_to_lhs) {
+					// see if we assign to rhs instead by swapping the operands
+					if (
+						this->rhs->destination.has_value()
+						&& this->dest == *this->rhs->destination // the rhs must equal the destination
+						&& !( // and the operator must not be noncommutative
+							this->op == Operator::minus
+							|| this->op == Operator::lshift
+							|| this->op == Operator::rshift
+						)
+					) {
+						// swap lhs and rhs in this tile
+						const ComputationNode *temp = this->rhs;
+						this->rhs = this->lhs;
+						this->lhs = temp;
+					} else {
+						fail_match();
+					}
+				}
+			}
+
+			static const int munch = 1;
+			static const int cost = 1;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				return {
+					to_l2_expr(this->dest) + " " + program::to_string(this->op) + "= " + to_l2_expr(*this->rhs)
+				};
+			}
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				return { this->lhs, this->rhs };
+			}
+		};
+
 		struct BinaryCompareAssignment : Tile {
 			Variable *dest;
 			Operator op;
@@ -800,6 +861,7 @@ namespace L3::code_gen::tiles {
 			tp::ConstantAssignment,
 			tp::BinaryArithmeticAssignment,
 			tp::BinaryArithmeticAssignmentDistinct,
+			tp::BinaryArithmeticAssignmentInPlace,
 			tp::BinaryCompareAssignment,
 			tp::PureLoad,
 			tp::PureStore,
