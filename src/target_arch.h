@@ -19,7 +19,7 @@ namespace L3::code_gen::target_arch {
 	std::string to_l2_expr(const BasicBlock *block);
 	std::string to_l2_expr(const Function *function);
 	std::string to_l2_expr(int64_t number);
-	std::string to_l2_expr(const ComputationNode &node);
+	std::string to_l2_expr(const ComputationNode &node, bool ignore_dest = false);
 
 	// Modifies a program so that its label names are all globally unique
 	// and always start with an underscore (so that non-underscore names can

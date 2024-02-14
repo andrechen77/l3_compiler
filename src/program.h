@@ -337,7 +337,7 @@ namespace L3::program {
 	// represents an atomic "computation" that just returns the value of a variable
 	struct VariableCn : ComputationNode {
 		// re-use the parent's destination field as the field "read" by this node
-		VariableCn(Variable *var) : ComputationNode({ var }) {}
+		VariableCn(Variable *var) : ComputationNode(std::make_optional<Variable *>(var)) {}
 		virtual std::string to_string() const override;
 		virtual Set<Variable *> get_vars_read() const override;
 		virtual Vec<Uptr<ComputationNode> *> get_merge_targets(Variable *target) override;

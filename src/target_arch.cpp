@@ -42,8 +42,8 @@ namespace L3::code_gen::target_arch {
 	std::string to_l2_expr(int64_t number){
 		return std::to_string(number);
 	}
-	std::string to_l2_expr(const ComputationNode &node) {
-		if (node.destination.has_value()) {
+	std::string to_l2_expr(const ComputationNode &node, bool ignore_dest) {
+		if (!ignore_dest && node.destination.has_value()) {
 			return to_l2_expr(*node.destination);
 		} else if (const LabelCn *label_node = dynamic_cast<const LabelCn *>(&node)) {
 			return to_l2_expr(label_node->jmp_dest);
@@ -52,7 +52,8 @@ namespace L3::code_gen::target_arch {
 		} else if (const NumberCn *number_node = dynamic_cast<const NumberCn *>(&node)) {
 			return to_l2_expr(number_node->value);
 		} else {
-			std::cout << "Error: I don't know how to convert this type of node into L2 syntax.\n";
+			std::cerr << "Error: I don't know how to convert this type of node into L2 syntax.\n";
+			std::cerr << node.to_string() << "\n";
 			exit(1);
 		}
 	}

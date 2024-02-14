@@ -127,6 +127,19 @@ namespace L3::code_gen::tiles {
 			}
 		};
 
+		// Matches: An ATOMIC computation node that can be expressed as an "S"
+		// in L2 and is not just a variable (i.e. number literal, label, or
+		// function name)
+		// Captures: the matched node
+		struct ConstantCtr {
+			const ComputationNode *node;
+
+			static ConstantCtr match(const ComputationNode &target) {
+				throw_unless(is_dynamic_type<NumberCn, LabelCn, FunctionCn>(target));
+				return { &target };
+			}
+		};
+
 		// Matches: a computation node that can be expressed as a "U" (i.e. a
 		// variable or function name) or is one of the std functions in L2
 		// Captures: the matched node
@@ -345,6 +358,33 @@ namespace L3::code_gen::tiles {
 			}
 			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
 				return { this->source };
+			}
+		};
+
+		struct ConstantAssignment : Tile {
+			// these two fields will always refer to the same thing because of
+			// the way we match twice on the same node
+			Variable *dest;
+			const ComputationNode *source;
+
+			using Structure = VariableCtr<ConstantCtr>;
+			ConstantAssignment(Structure s) :
+				dest { s.var },
+				source { s.node.node }
+			{}
+
+			static const int munch = 1;
+			static const int cost = 1;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				return {
+					to_l2_expr(this->dest) + " <- " + to_l2_expr(*this->source, true)
+				};
+			}
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				// because the source is a constant, it is considered to have
+				// already been tiled, so don't return it.
+				return {};
 			}
 		};
 
@@ -685,6 +725,7 @@ namespace L3::code_gen::tiles {
 		attempt_tile_matches<
 			tp::NoOp,
 			tp::PureAssignment,
+			tp::ConstantAssignment,
 			tp::BinaryArithmeticAssignment,
 			tp::BinaryCompareAssignment,
 			tp::PureLoad,
