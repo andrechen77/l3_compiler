@@ -174,7 +174,7 @@ namespace L3::program {
 					// the variable is dead after this, so add this instruction
 					// as as merge candidate
 					alive_until.insert({ var, new_it });
-				} else if (alive_until_it->second != new_it) {
+				} else /* if (alive_until_it->second != new_it) */ { // including this condition allows the merged trees to become bigger, but it makes it harder to figure out which order the tiles go since now parts of the tree can interfere with each other (if we consider the trees to be perfect pipelines of data flow, then the resulting trees are still correct)
 					// the variable is alive after this tree so no one can EVER
 					// be a merge candidate until the variable is written to
 					alive_until_it->second = Opt<Iter>();
