@@ -52,11 +52,6 @@ namespace L3::code_gen::tiles {
 		throw MatchFailError {};
 	}
 
-	template<typename... CnSubclasses>
-	bool is_dynamic_type(const ComputationNode &s) {
-		return (dynamic_cast<const CnSubclasses *>(&s) || ...);
-	}
-
 	// "CTR" stands for "computation tree rule", and is kind of like a pegtl
 	// parsing rule but instead of matching characters it matches parts of
 	// a computation tree.
@@ -838,8 +833,11 @@ namespace L3::code_gen::tiles {
 		struct ReturnVal : Tile {
 			const ComputationNode *value;
 
+			// We use InexplicableSCtr here because we care about what's allowed
+			// in the L2 grammar, not L3's, and L2 allows use to put an "S" into
+			// rax.
 			using Structure = ReturnValCtr<
-				InexplicableTCtr
+				InexplicableSCtr
 			>;
 			ReturnVal(Structure s) :
 				value { s.value.node }

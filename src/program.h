@@ -452,6 +452,11 @@ namespace L3::program {
 	std::string to_string(const Uptr<ComputationNode> &node);
 	std::string to_string(const ComputationNode &node);
 
+	template<typename... CnSubclasses>
+	bool is_dynamic_type(const ComputationNode &s) {
+		return (dynamic_cast<const CnSubclasses *>(&s) || ...);
+	}
+
 	// meant to hold a computation tree as well as all the information that comes
 	// along with it: variables read and variables written, as well as all
 	// possible merge candidates

@@ -588,6 +588,9 @@ namespace L3::program {
 		if (MoveCn *move_node = dynamic_cast<MoveCn *>(merge_child->get())) {
 			// optimize away a child move node; e.g. a <- b <- c becomes a <- c
 			merge_child = &move_node->source;
+		} else if (is_dynamic_type<NumberCn, FunctionCn, LabelCn>(*merge_child->get())) {
+			// remove an intermediate variable if the node is a constant
+			(*merge_child)->destination.reset();
 		}
 		*merge_target = mv(*merge_child);
 		other.root_nullable = nullptr;
