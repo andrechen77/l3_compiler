@@ -143,6 +143,17 @@ namespace L3::code_gen::tiles {
 			}
 		};
 
+		// Matches: A computation node that is a number literal in L2
+		// Captures: the value
+		struct NumberCtr {
+			int64_t value;
+
+			static NumberCtr match(const ComputationNode &target) {
+				const NumberCn &number_node = unwrap_node_type<NumberCn>(target);
+				return { number_node.value };
+			}
+		};
+
 		// Matches: a computation node that can be expressed as a "U" (i.e. a
 		// variable or function name) or is one of the std functions in L2
 		// Captures: the matched node
@@ -212,8 +223,8 @@ namespace L3::code_gen::tiles {
 				} catch (MatchFailError &e) {
 					return {
 						bin_node.op,
-						RhsCtr::match(*bin_node.lhs),
-						LhsCtr::match(*bin_node.rhs)
+						LhsCtr::match(*bin_node.rhs),
+						RhsCtr::match(*bin_node.lhs)
 					};
 				}
 			}
