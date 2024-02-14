@@ -734,6 +734,48 @@ namespace L3::code_gen::tiles {
 			}
 		};
 
+		struct StoreWithOffset : Tile {
+			const ComputationNode *base;
+			int64_t offset;
+			const ComputationNode *source;
+
+			using Structure = StoreCtr<
+				CommutativeBinaryCtr<
+					VariableCtr<AnyCtr>,
+					NumberCtr
+				>,
+				InexplicableSCtr
+			>;
+			StoreWithOffset(Structure s) :
+				base { s.address.lhs.node.node },
+				offset { s.address.rhs.value },
+				source { s.source.node }
+			{
+				throw_unless(this->offset % 8 == 0);
+				switch (s.address.op) {
+					case Operator::plus:
+						break;
+					case Operator::minus:
+						this->offset *= -1;
+						break;
+					default:
+						fail_match();
+				}
+			}
+
+			static const int munch = 2;
+			static const int cost = 1;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				return {
+					"mem " + to_l2_expr(*this->base) + " " + to_l2_expr(this->offset) + " <- " + to_l2_expr(*this->source)
+				};
+			}
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				return { this->base, this->source };
+			}
+		};
+
 		struct GotoStatement : Tile {
 			BasicBlock *jmp_dest;
 
@@ -922,6 +964,7 @@ namespace L3::code_gen::tiles {
 			tp::PureLoad,
 			tp::LoadWithOffset,
 			tp::PureStore,
+			tp::StoreWithOffset,
 			tp::GotoStatement,
 			tp::PureConditionalBranch,
 			tp::ReturnVoid,
