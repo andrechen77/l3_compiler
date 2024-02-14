@@ -48,6 +48,9 @@ namespace L3::code_gen::tiles {
 			throw MatchFailError {};
 		}
 	}
+	void fail_match() {
+		throw MatchFailError {};
+	}
 
 	template<typename... CnSubclasses>
 	bool is_dynamic_type(const ComputationNode &s) {
@@ -457,6 +460,49 @@ namespace L3::code_gen::tiles {
 			}
 		};
 
+		struct BinaryArithmeticAssignmentDistinct : Tile {
+			Variable *dest;
+			Operator op;
+			const ComputationNode *lhs;
+			const ComputationNode *rhs;
+
+			using Structure = VariableCtr<
+				NoncommutativeBinaryCtr<
+					InexplicableTCtr,
+					InexplicableTCtr
+				>
+			>;
+			BinaryArithmeticAssignmentDistinct(Structure s) :
+				dest { s.var },
+				op { s.node.op },
+				lhs { s.node.lhs.node },
+				rhs { s.node.rhs.node }
+			{
+				throw_unless(
+					this->op == Operator::plus
+					|| this->op == Operator::minus
+					|| this->op == Operator::times
+					|| this->op == Operator::bitwise_and
+					|| this->op == Operator::lshift
+					|| this->op == Operator::rshift
+				);
+				throw_unless(!this->rhs->destination.has_value() || this->dest != *this->rhs->destination);
+			}
+
+			static const int munch = 1;
+			static const int cost = 2;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				return {
+					to_l2_expr(this->dest) + " <- " + to_l2_expr(*this->lhs),
+					to_l2_expr(this->dest) + " " + program::to_string(this->op) + "= " + to_l2_expr(*this->rhs)
+				};
+			}
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				return { this->lhs, this->rhs };
+			}
+		};
+
 		struct BinaryCompareAssignment : Tile {
 			Variable *dest;
 			Operator op;
@@ -753,6 +799,7 @@ namespace L3::code_gen::tiles {
 			tp::PureAssignment,
 			tp::ConstantAssignment,
 			tp::BinaryArithmeticAssignment,
+			tp::BinaryArithmeticAssignmentDistinct,
 			tp::BinaryCompareAssignment,
 			tp::PureLoad,
 			tp::PureStore,
