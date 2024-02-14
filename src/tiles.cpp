@@ -684,6 +684,15 @@ namespace L3::code_gen::tiles {
 				offset { s.node.address.rhs.value }
 			{
 				throw_unless(this->offset % 8 == 0);
+				switch (s.node.address.op) {
+					case Operator::plus:
+						break;
+					case Operator::minus:
+						this->offset *= -1;
+						break;
+					default:
+						fail_match();
+				}
 			}
 
 			static const int munch = 2;
