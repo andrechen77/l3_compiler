@@ -126,6 +126,25 @@ namespace L3::program {
 		};
 		return map[static_cast<int>(op)];
 	}
+	Opt<Operator> flip_operator(Operator op) {
+		switch (op) {
+			// operators that are commutative
+			case Operator::eq:
+			case Operator::plus:
+			case Operator::times:
+			case Operator::bitwise_and:
+				return op;
+
+			// operators that flip
+			case Operator::lt: return Operator::gt;
+			case Operator::le: return Operator::ge;
+			case Operator::gt: return Operator::lt;
+			case Operator::ge: return Operator::le;
+
+			// operators that can't be flipped
+			default: return {};
+		}
+	}
 
 	void BinaryOperation::bind_to_scope(AggregateScope &agg_scope) {
 		this->lhs->bind_to_scope(agg_scope);

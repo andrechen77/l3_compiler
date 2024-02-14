@@ -204,7 +204,8 @@ namespace L3::code_gen::tiles {
 			}
 		};
 
-		// Matches: a BinaryCn where the order of the operands DOESN'T matter
+		// Matches: a BinaryCn, but also tries the reverse order of operands if
+		// the operator can be flipped
 		// Captures: the Operator used
 		template<typename LhsCtr, typename RhsCtr>
 		struct CommutativeBinaryCtr {
@@ -221,8 +222,9 @@ namespace L3::code_gen::tiles {
 						RhsCtr::match(*bin_node.rhs)
 					};
 				} catch (MatchFailError &e) {
+					Operator flipped_op = unwrap_optional(flip_operator(bin_node.op));
 					return {
-						bin_node.op,
+						flipped_op,
 						LhsCtr::match(*bin_node.rhs),
 						RhsCtr::match(*bin_node.lhs)
 					};

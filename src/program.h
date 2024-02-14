@@ -136,6 +136,7 @@ namespace L3::program {
 	};
 	Operator str_to_op(std::string_view str);
 	std::string to_string(Operator op);
+	Opt<Operator> flip_operator(Operator op);
 
 	class BinaryOperation : public Expr {
 		Uptr<Expr> lhs;
