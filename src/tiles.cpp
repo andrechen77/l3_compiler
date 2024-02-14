@@ -732,6 +732,69 @@ namespace L3::code_gen::tiles {
 			}
 		};
 
+		struct BinaryCompareJump : Tile {
+			BasicBlock *jmp_dest;
+			Operator op;
+			const ComputationNode *lhs;
+			const ComputationNode *rhs;
+
+			using Structure = ConditionalBranchCtr<
+				NoncommutativeBinaryCtr<
+					InexplicableTCtr,
+					InexplicableTCtr
+				>
+			>;
+
+			BinaryCompareJump(Structure s) :
+				jmp_dest { s.jmp_dest },
+				op { s.condition.op },
+				lhs { s.condition.lhs.node },
+				rhs { s.condition.rhs.node }
+			{
+				throw_unless(
+					this->op == Operator::lt
+					|| this->op == Operator::le
+					|| this->op == Operator::eq
+					|| this->op == Operator::ge
+					|| this->op == Operator::gt
+				);
+			}
+
+			static const int munch = 2;
+			static const int cost = 1;
+
+			virtual Vec<std::string> to_l2_instructions() const override {
+				// if we use gt or ge, mirror the operator and swap the operands
+				const ComputationNode *lhs_ptr = this->lhs;
+				const ComputationNode *rhs_ptr = this->rhs;
+				Operator l2_op = this->op;
+				switch (this->op) {
+					case Operator::gt:
+						l2_op = Operator::lt;
+						lhs_ptr = this->rhs;
+						rhs_ptr = this->lhs;
+						break;
+					case Operator::ge:
+						l2_op = Operator::le;
+						lhs_ptr = this->rhs;
+						rhs_ptr = this->lhs;
+						break;
+					// default cause is to do nothing
+				}
+
+				return {
+					"cjump "
+					+ to_l2_expr(*lhs_ptr) + " "
+					+ program::to_string(l2_op) + " "
+					+ to_l2_expr(*rhs_ptr) + " "
+					+ to_l2_expr(this->jmp_dest)
+				};
+			}
+			virtual Vec<const L3::program::ComputationNode *> get_unmatched() const override {
+				return { this->lhs, this->rhs };
+			}
+		};
+
 		struct PureLoad : Tile {
 			Variable *dest;
 			const ComputationNode *address;
@@ -1060,6 +1123,7 @@ namespace L3::code_gen::tiles {
 			tp::LeaMultiply,
 			tp::LeaShift,
 			tp::BinaryCompareAssignment,
+			tp::BinaryCompareJump,
 			tp::PureLoad,
 			tp::LoadWithOffset,
 			tp::PureStore,
