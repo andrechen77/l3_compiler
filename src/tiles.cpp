@@ -525,11 +525,11 @@ namespace L3::code_gen::tiles {
 
 			using Structure = StoreCtr<
 				VariableCtr<AnyCtr>,
-				VariableCtr<AnyCtr>
+				InexplicableSCtr
 			>;
 			PureStore(Structure s) :
 				address { s.address.node.node },
-				source { s.source.node.node }
+				source { s.source.node }
 			{}
 
 			static const int munch = 1;
