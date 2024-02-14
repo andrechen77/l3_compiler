@@ -102,7 +102,7 @@ namespace L3::program {
 				for (Variable *read_var : child_iter->get_variables_read()) {
 					if (auto earliest_write_it = earliest_write.find(read_var);
 						earliest_write_it != earliest_write.end()
-						&& earliest_write_it->second < parent_iter)
+						&& earliest_write_it->second > parent_iter)
 					{
 						has_conflict = true;
 						break;
@@ -113,7 +113,7 @@ namespace L3::program {
 					// the child and parent
 					if (!child_iter->get_has_load()
 						|| !earliest_store
-						|| *earliest_store >= parent_iter)
+						|| *earliest_store <= parent_iter)
 					{
 						// finally, we know it's okay to merge
 						bool success = parent_iter->merge(*child_iter);
@@ -131,7 +131,7 @@ namespace L3::program {
 
 		// no matter what, prevent merge_var from being used in another merge
 		// until another tree reads from it
-		earliest_write.insert({ merge_var, result_iter });
+		earliest_write.insert_or_assign(merge_var, result_iter);
 
 		return result_iter;
 	}
@@ -142,7 +142,7 @@ namespace L3::program {
 		// in which the variable is used).
 		// - Maps to None (empty optional) if there are no merge
 		// candiates, such as if the Variable is alive until the end of the
-		// basic block.
+		// basic block, or if multiple instructions depend on that variable
 		// - Entry does not exist if the variable is not alive
 		Map<Variable *, Opt<Iter>> alive_until;
 
@@ -168,8 +168,13 @@ namespace L3::program {
 			for (Variable *var : new_it->get_variables_read()) {
 				auto alive_until_it = alive_until.find(var);
 				if (alive_until_it == alive_until.end()) {
-					// the variable is dead after this, so add this instruction as as merge candidate
+					// the variable is dead after this, so add this instruction
+					// as as merge candidate
 					alive_until.insert({ var, new_it });
+				} else {
+					// the variable is alive after this tree so no one can EVER
+					// be a merge candidate until the variable is written to
+					alive_until_it->second = Opt<Iter>();
 				}
 			}
 		}
